@@ -510,11 +510,12 @@ When implementing:
 13. Keep Docker support compatible with the eventual Hostinger VPS deployment.
 14. Update documentation when architecture or tariff rules change.
 15. If a requirement is ambiguous and materially changes the data model, record it in the PRP Open Questions section before implementation.
-16. While exiting a session, commit the current changes to the `https://github.com/dbala2007/WattLedger-TN` repository, with a commit message that accurately describes what changed.
+16. Day-to-day development happens on the `dev` branch of `https://github.com/dbala2007/WattLedger-TN`, never directly on `master`. While exiting a session, commit and push the current changes to `dev` with a commit message that accurately describes what changed.
+17. Only merge `dev` into `master` when the user explicitly asks for it. At that point, open a pull request from `dev` into `master`, run a code review on the diff, post the findings as PR review comments, and let the user review and approve the merge themselves - never merge it automatically.
 
 ---
 
-## 17. Definition of Done for a Feature
+## 18. Definition of Done for a Feature
 
 A feature is complete only when:
 

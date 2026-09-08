@@ -1,0 +1,27 @@
+[project]
+name = "wattledger-backend"
+version = "0.1.0"
+description = "WattLedger TN backend - electricity and solar usage tracking domain logic and API"
+readme = "README.md"
+authors = [
+    { name = "Balasubramanian Duraiswamy", email = "dbala2007@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "email-validator>=2.3.0",
+    "fastapi>=0.141.1",
+    "pydantic-settings>=2.15.0",
+    "pyjwt>=2.13.0",
+    "sqlmodel>=0.0.42",
+    "tzdata>=2026.3",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

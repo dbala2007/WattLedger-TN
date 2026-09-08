@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info/
+build/
+dist/
+
+# Python virtual environments
+.venv/
+venv/
+
+# uv
+backend/.python-version
+
+# Local SQLite database (Phase 1 dev data - never commit real usage data).
+# The trailing * also catches ad-hoc backups like wattledger.db.pre-x-backup,
+# which plain *.db would miss since they don't end in ".db".
+*.db*
+*.sqlite3*
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors/IDE
+.vscode/
+.idea/
+
+# Flutter (frontend, added in a later phase)
+frontend/**/.dart_tool/
+frontend/**/build/
+frontend/**/.flutter-plugins
+frontend/**/.flutter-plugins-dependencies
+
+# OS
+.DS_Store
+Thumbs.db

@@ -47,6 +47,34 @@ output.
 Docker Compose network, so the database is never directly exposed to the
 internet.
 
+**Addendum (discovered once actually deploying to the VPS): the VPS
+already runs a shared Traefik instance for other projects, so Caddy does
+not get its own 80/443.** This wasn't known when the decisions above were
+made. The VPS (`/docker/traefik/docker-compose.yml`) runs one Traefik
+container for every project on the box - `network_mode: host`, Docker
+provider (`exposedbydefault=false`), entrypoints `web`/`websecure` on
+80/443, and a shared `letsencrypt` cert resolver (HTTP-01, one ACME
+account/email). Sibling projects (e.g. `aiwithbala-portfolio`,
+`tm.aiwithbala.in`) attach purely via Docker labels - no ports published
+to the host, no shared Docker network to join, since Traefik's host
+networking can already reach any container by its own compose-network IP.
+WattLedger now follows the same pattern:
+
+- `docker-compose.yml`'s `caddy` service no longer publishes 80/443 or
+  manages TLS/certs (no `caddy_data`/`caddy_config` volumes either) - it's
+  a plain internal static file server for the built web app, discovered by
+  Traefik via `traefik.*` labels (`wattledger-web` router,
+  `Host(${WEB_DOMAIN})`, `certresolver=letsencrypt`).
+- `backend` gets the same treatment directly - a `wattledger-api` router/
+  service pair in its own labels - rather than being reverse-proxied
+  through Caddy's `reverse_proxy backend:8000` block, which is removed.
+- The `Caddyfile` dropped its two per-domain blocks for one `:80 { ... }`
+  block, since Traefik already did host-based routing before the request
+  reaches Caddy.
+- This is additive only: nothing in Traefik's own compose file, its ACME
+  storage, or any other project on the VPS is touched by WattLedger's
+  deploy.
+
 ## Consequences
 
 - No query/domain/service code changed for the Postgres migration - the

@@ -336,8 +336,12 @@ belong in chat with any assistant, including this one.
    ```
 7. **Verify**: `curl https://api.wattledger.aiwithbala.in/health` should
    return `{"status":"ok"}`, and `https://wattledger.aiwithbala.in` should
-   load the app in a browser - both over HTTPS with a valid certificate
-   Caddy obtained automatically.
+   load the app in a browser - both over HTTPS with a valid certificate.
+   TLS/routing is handled by the Traefik instance already running on this
+   VPS for other projects, not by Caddy - see
+   `docs/decisions/0006-production-deployment.md`. Caddy here only serves
+   the built web app as static files, reached by Traefik over the private
+   Docker network (no host port of its own).
 
 **Point the desktop and mobile apps at production** the same way as LAN
 testing (see the Mobile section above), but with the real domain instead

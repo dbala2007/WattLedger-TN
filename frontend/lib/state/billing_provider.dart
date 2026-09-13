@@ -44,4 +44,15 @@ class BillingProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Clears everything back to a fresh state - called on logout so a
+  /// different user logging in afterwards never briefly sees the previous
+  /// user's billing data before their own load completes.
+  void reset() {
+    _cycle = null;
+    _estimate = null;
+    _loading = false;
+    _error = null;
+    notifyListeners();
+  }
 }

@@ -94,4 +94,14 @@ class TariffProvider extends ChangeNotifier {
     );
     await loadPlans();
   }
+
+  /// Clears everything back to a fresh state - called on logout so a
+  /// different user logging in afterwards never briefly sees the previous
+  /// user's tariff plans before their own load completes.
+  void reset() {
+    _plans = [];
+    _loading = false;
+    _error = null;
+    notifyListeners();
+  }
 }

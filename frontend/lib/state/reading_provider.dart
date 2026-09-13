@@ -70,4 +70,15 @@ class ReadingProvider extends ChangeNotifier {
       await loadReadings(_loadedForMeterId!);
     }
   }
+
+  /// Clears everything back to a fresh state - called on logout so a
+  /// different user logging in afterwards never briefly sees the previous
+  /// user's readings before their own load completes.
+  void reset() {
+    _readings = [];
+    _loading = false;
+    _error = null;
+    _loadedForMeterId = null;
+    notifyListeners();
+  }
 }

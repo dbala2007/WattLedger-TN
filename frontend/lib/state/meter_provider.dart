@@ -51,6 +51,17 @@ class MeterProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clears everything back to a fresh state - called on logout so a
+  /// different user logging in afterwards never briefly sees the previous
+  /// user's meters before their own load completes.
+  void reset() {
+    _meters = [];
+    _selected = null;
+    _loading = false;
+    _error = null;
+    notifyListeners();
+  }
+
   Future<Meter> createMeter({
     required String meterNumber,
     String? displayName,

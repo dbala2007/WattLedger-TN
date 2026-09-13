@@ -1,10 +1,10 @@
-"""Ensures a default tariff plan exists so the billing engine always has
-something to calculate against - without anyone having to re-enter it by
-hand every time the local dev database is reset (e.g. after a schema
-change during development).
+"""Ensures the household's default tariff plan, meters, and reading history
+exist - without anyone having to re-enter them by hand every time the
+local dev database is reset (e.g. after a schema change during
+development).
 
-IMPORTANT: These are the household's own entered figures, not a verified
-TNERC/TNPDCL order. PRP.md section 4's tariff-source policy still applies -
+IMPORTANT: These are the household's own entered figures, not verified
+TNERC/TNPDCL data. PRP.md section 4's tariff-source policy still applies -
 check the latest TNERC order and TNPDCL billing guidance, and record the
 real order number/date in source_reference, before trusting this for a
 real bill.
@@ -16,10 +16,10 @@ from decimal import Decimal
 from sqlmodel import Session
 
 from app.core.logging import get_logger
-from app.models.enums import BillingFrequency
-from app.repositories import tariff_repository
+from app.models.enums import BillingFrequency, SolarMode
+from app.repositories import meter_repository, tariff_repository, user_repository
 from app.schemas.tariff import SubsidyRuleCreate, TariffSlabCreate
-from app.services import tariff_service
+from app.services import meter_service, reading_service, tariff_service
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,10 @@ def seed_default_tariff_plan_if_missing(session: Session) -> None:
         effective_to=None,
         billing_frequency=BillingFrequency.BI_MONTHLY,
         fixed_charge=Decimal("0"),
-        source_reference="Vijay",
+        source_reference=(
+            "PLACEHOLDER - source unknown, verify against the real TNERC order/"
+            "TNPDCL guidance before trusting for a real bill (PRP.md section 4)."
+        ),
         active=True,
         subsidy_rules=[
             SubsidyRuleCreate(
@@ -79,3 +82,131 @@ def seed_default_tariff_plan_if_missing(session: Session) -> None:
         ],
     )
     logger.info("Seeded default tariff plan %s (%s slabs, %s subsidy rules).", plan.id, len(slabs), len(rules))
+
+
+# This household's own account - meters/readings are per-user data (unlike
+# the shared tariff plan above), so re-seeding them for every new signup
+# would leak one person's usage history into someone else's fresh account.
+# Restricting the seed to this specific email means only this household's
+# own account gets its data restored after a dev database reset.
+OWNER_EMAIL = "dbala2007@gmail.com"
+
+# (reading_date, eb_units, solar_units) - solar_units is None for the
+# non-solar meter. Captured from what was actually entered through the app.
+_SOLAR_METER_READINGS = [
+    (date(2026, 7, 26), Decimal("1786.4"), Decimal("3629.6")),
+    (date(2026, 7, 27), Decimal("1795.1"), Decimal("3638.4")),
+    (date(2026, 7, 28), Decimal("1803.2"), Decimal("3646.6")),
+    (date(2026, 7, 29), Decimal("1810.6"), Decimal("3656.2")),
+    (date(2026, 7, 30), Decimal("1819.6"), Decimal("3666.2")),
+    (date(2026, 7, 31), Decimal("1828.8"), Decimal("3674.4")),
+    (date(2026, 8, 1), Decimal("1837.5"), Decimal("3684.9")),
+    (date(2026, 8, 2), Decimal("1846.7"), Decimal("3693.5")),
+    (date(2026, 8, 3), Decimal("1854.8"), Decimal("3701.5")),
+    (date(2026, 8, 4), Decimal("1862.4"), Decimal("3712.4")),
+    (date(2026, 8, 5), Decimal("1870.1"), Decimal("3723.3")),
+    (date(2026, 8, 6), Decimal("1876.9"), Decimal("3728.6")),
+    (date(2026, 8, 7), Decimal("1883.7"), Decimal("3734.3")),
+    (date(2026, 8, 8), Decimal("1891.1"), Decimal("3742.1")),
+    (date(2026, 8, 9), Decimal("1900.0"), Decimal("3753.0")),
+    (date(2026, 8, 10), Decimal("1911.3"), Decimal("3762.9")),
+    (date(2026, 8, 11), Decimal("1917.7"), Decimal("3774.5")),
+    (date(2026, 8, 12), Decimal("1926.3"), Decimal("3785.6")),
+    (date(2026, 8, 13), Decimal("1933.3"), Decimal("3792.3")),
+    (date(2026, 8, 14), Decimal("1940.1"), Decimal("3804.2")),
+    (date(2026, 8, 15), Decimal("1947.9"), Decimal("3814.9")),
+    (date(2026, 8, 16), Decimal("1956.1"), Decimal("3828.3")),
+    (date(2026, 8, 17), Decimal("1964.5"), Decimal("3838.4")),
+    (date(2026, 8, 18), Decimal("1973.3"), Decimal("3849.4")),
+    (date(2026, 8, 19), Decimal("1980.3"), Decimal("3856.8")),
+    (date(2026, 8, 20), Decimal("1987.4"), Decimal("3867.3")),
+    (date(2026, 8, 21), Decimal("1994.7"), Decimal("3877.6")),
+    (date(2026, 8, 22), Decimal("2002.7"), Decimal("3890.0")),
+    (date(2026, 8, 23), Decimal("2010.3"), Decimal("3900.6")),
+]
+
+_NORMAL_METER_READINGS = [
+    (date(2026, 7, 26), Decimal("9792.2"), None),
+    (date(2026, 7, 27), Decimal("9798.6"), None),
+    (date(2026, 7, 28), Decimal("9808.6"), None),
+    (date(2026, 7, 29), Decimal("9818.3"), None),
+    (date(2026, 7, 30), Decimal("9824.1"), None),
+    (date(2026, 7, 31), Decimal("9833.2"), None),
+    (date(2026, 8, 1), Decimal("9840.6"), None),
+    (date(2026, 8, 2), Decimal("9847.3"), None),
+    (date(2026, 8, 3), Decimal("9853.5"), None),
+    (date(2026, 8, 4), Decimal("9860.3"), None),
+    (date(2026, 8, 5), Decimal("9866.9"), None),
+    (date(2026, 8, 6), Decimal("9872.2"), None),
+    (date(2026, 8, 7), Decimal("9879.1"), None),
+    (date(2026, 8, 8), Decimal("9885.4"), None),
+    (date(2026, 8, 9), Decimal("9892.3"), None),
+    (date(2026, 8, 10), Decimal("9894.9"), None),
+    (date(2026, 8, 11), Decimal("9900.5"), None),
+    (date(2026, 8, 12), Decimal("9906.3"), None),
+    (date(2026, 8, 13), Decimal("9916.2"), None),
+    (date(2026, 8, 14), Decimal("9921.2"), None),
+    (date(2026, 8, 15), Decimal("9927.6"), None),
+    (date(2026, 8, 16), Decimal("9934.8"), None),
+    (date(2026, 8, 17), Decimal("9941.5"), None),
+    (date(2026, 8, 18), Decimal("9948.5"), None),
+    (date(2026, 8, 19), Decimal("9953.4"), None),
+    (date(2026, 8, 20), Decimal("9958.5"), None),
+    (date(2026, 8, 21), Decimal("9964.9"), None),
+    (date(2026, 8, 22), Decimal("9971.2"), None),
+    (date(2026, 8, 23), Decimal("9977.9"), None),
+]
+
+_DEFAULT_METERS = [
+    {
+        "meter_number": "09-434-005-3054",
+        "display_name": "Solar EB 3054",
+        "solar_mode": SolarMode.ON_GRID,
+        "readings": _SOLAR_METER_READINGS,
+    },
+    {
+        "meter_number": "09-434-005-2888",
+        "display_name": "Normal EB 2888",
+        "solar_mode": SolarMode.NONE,
+        "readings": _NORMAL_METER_READINGS,
+    },
+]
+
+_METER_BILLING_CYCLE_REFERENCE_DATE = date(2026, 7, 26)
+
+
+def seed_default_meters_if_missing(session: Session) -> None:
+    """Recreates OWNER_EMAIL's two meters and their full reading history,
+    through the same create_meter/create_reading calls the app itself
+    uses (so balances are computed the normal way, not copied verbatim).
+
+    Does nothing if that account doesn't exist yet (nobody to attach
+    meters to) or already has meters (never overwrites real data with
+    this snapshot).
+    """
+    user = user_repository.get_by_email(session, OWNER_EMAIL)
+    if user is None:
+        return
+    if meter_repository.list_all(session, user.id):
+        return
+
+    for meter_data in _DEFAULT_METERS:
+        meter = meter_service.create_meter(
+            session,
+            user_id=user.id,
+            meter_number=meter_data["meter_number"],
+            display_name=meter_data["display_name"],
+            solar_mode=meter_data["solar_mode"],
+            billing_cycle_reference_date=_METER_BILLING_CYCLE_REFERENCE_DATE,
+        )
+        for reading_date, eb_units, solar_units in meter_data["readings"]:
+            reading_service.create_reading(
+                session,
+                meter_id=meter.id,
+                user_id=user.id,
+                reading_date=reading_date,
+                eb_units=eb_units,
+                solar_units=solar_units,
+            )
+
+    logger.info("Seeded default meters and reading history for %s.", OWNER_EMAIL)

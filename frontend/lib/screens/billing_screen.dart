@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/formatters.dart';
 import '../models/billing.dart';
 import '../models/meter.dart';
+import '../models/solar_mode.dart';
 import '../state/billing_provider.dart';
 import '../widgets/async_state_view.dart';
 import '../widgets/no_meter_placeholder.dart';
@@ -64,7 +65,8 @@ class _BillingScreenState extends State<BillingScreen> {
                 children: [
                   if (billingProvider.cycle != null) _CycleCard(cycle: billingProvider.cycle!),
                   const SizedBox(height: 16),
-                  if (billingProvider.estimate != null) _EstimateCard(estimate: billingProvider.estimate!),
+                  if (billingProvider.estimate != null)
+                    _EstimateCard(estimate: billingProvider.estimate!, solarMode: widget.meter!.solarMode),
                 ],
               ),
             ),
@@ -100,8 +102,9 @@ class _CycleCard extends StatelessWidget {
 
 class _EstimateCard extends StatelessWidget {
   final BillEstimate estimate;
+  final SolarMode solarMode;
 
-  const _EstimateCard({required this.estimate});
+  const _EstimateCard({required this.estimate, required this.solarMode});
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +126,8 @@ class _EstimateCard extends StatelessWidget {
             Text('Estimated bill', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             _row('Total cycle units', formatUnits(estimate.totalEbUnits)),
+            if (solarMode != SolarMode.none)
+              _row('Total solar units', formatUnits(estimate.totalSolarUnits)),
             _row('Free/subsidized units', formatUnits(estimate.freeUnitsApplied!)),
             _row('Chargeable units', formatUnits(estimate.chargeableUnits!)),
             const Divider(height: 24),

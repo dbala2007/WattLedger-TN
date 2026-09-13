@@ -38,6 +38,7 @@ class BillBreakdown:
     rule_group: str
     free_units_applied: Decimal
     chargeable_units: Decimal
+    solar_units_offset: Decimal = Decimal("0")
     slab_charges: list[SlabCharge] = field(default_factory=list)
     fixed_charge: Decimal = Decimal("0")
     total_estimated_amount: Decimal = Decimal("0")
@@ -89,10 +90,23 @@ def calculate_bill(
     subsidy_rules: list[SubsidyRule],
     slabs: list[TariffSlab],
     as_of_date: date,
+    solar_units_generated: Decimal = Decimal("0"),
 ) -> BillBreakdown:
-    """Compute the full bill breakdown for one billing cycle's consumption."""
+    """Compute the full bill breakdown for one billing cycle's consumption.
+
+    solar_units_generated is a net-metering credit: it reduces the
+    post-subsidy chargeable units directly (never below zero - generating
+    more than you have left to pay for doesn't create a negative bill).
+    total_units and the subsidy-rule/slab selection are unaffected - the
+    free-unit threshold is based on gross consumption drawn from the grid,
+    not net of self-generation. Callers are responsible for only passing a
+    non-zero value for meters where this actually applies (grid-tied/on-grid
+    solar) - this function doesn't know a meter's solar_mode.
+    """
     if total_units < 0:
         raise ValueError("total_units cannot be negative.")
+    if solar_units_generated < 0:
+        raise ValueError("solar_units_generated cannot be negative.")
 
     rule = select_subsidy_rule(total_units, subsidy_rules, as_of_date)
 
@@ -100,6 +114,9 @@ def calculate_bill(
     chargeable_units = total_units - free_units
     if chargeable_units < 0:
         chargeable_units = Decimal("0")
+
+    solar_units_offset = min(solar_units_generated, chargeable_units)
+    chargeable_units -= solar_units_offset
 
     group_slabs = sorted(
         (s for s in slabs if s.rule_group == rule.rule_name),
@@ -147,6 +164,7 @@ def calculate_bill(
         rule_group=rule.rule_name,
         free_units_applied=free_units,
         chargeable_units=chargeable_units,
+        solar_units_offset=solar_units_offset,
         slab_charges=slab_charges,
         fixed_charge=tariff_plan.fixed_charge,
         total_estimated_amount=total_amount,

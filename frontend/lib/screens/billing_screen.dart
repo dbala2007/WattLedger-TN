@@ -129,6 +129,8 @@ class _EstimateCard extends StatelessWidget {
             if (solarMode != SolarMode.none)
               _row('Total solar units', formatUnits(estimate.totalSolarUnits)),
             _row('Free/subsidized units', formatUnits(estimate.freeUnitsApplied!)),
+            if (solarMode == SolarMode.onGrid)
+              _row('Solar credit applied', formatUnits(estimate.solarUnitsOffset ?? 0)),
             _row('Chargeable units', formatUnits(estimate.chargeableUnits!)),
             const Divider(height: 24),
             Text('Slabs applied (${estimate.ruleGroup})', style: Theme.of(context).textTheme.titleSmall),

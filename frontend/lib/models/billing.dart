@@ -59,6 +59,7 @@ class BillEstimate {
   final String? ruleGroup;
   final double? freeUnitsApplied;
   final double? chargeableUnits;
+  final double? solarUnitsOffset;
   final List<SlabCharge> slabCharges;
   final double? fixedCharge;
   final double? totalEstimatedAmount;
@@ -78,6 +79,7 @@ class BillEstimate {
     required this.ruleGroup,
     required this.freeUnitsApplied,
     required this.chargeableUnits,
+    required this.solarUnitsOffset,
     required this.slabCharges,
     required this.fixedCharge,
     required this.totalEstimatedAmount,
@@ -101,6 +103,7 @@ class BillEstimate {
       ruleGroup: json['rule_group'] as String?,
       freeUnitsApplied: parseNullableDecimal(json['free_units_applied']),
       chargeableUnits: parseNullableDecimal(json['chargeable_units']),
+      solarUnitsOffset: parseNullableDecimal(json['solar_units_offset']),
       slabCharges: (json['slab_charges'] as List<dynamic>? ?? [])
           .map((e) => SlabCharge.fromJson(e as Map<String, dynamic>))
           .toList(),

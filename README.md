@@ -40,6 +40,9 @@ Phase 2 (billing engine):
 - Effective-dated, editable tariff plans with subsidy rules and slabs
   (never hard-coded - PRP.md section 5)
 - Bill estimate for the current cycle with a full slab-by-slab breakdown
+- On-grid solar generation nets against chargeable units (after subsidy
+  free units, never below zero) as a net-metering credit - see
+  `docs/decisions/0004-solar-net-metering-credit.md`
 - The backend auto-seeds a default tariff plan on startup whenever the
   database has none yet (`app/db/seed_data.py`) - it's never overwritten
   once a plan exists, so this only saves re-entering it after a dev

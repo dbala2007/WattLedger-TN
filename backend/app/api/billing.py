@@ -48,6 +48,7 @@ def get_bill_estimate(
         rule_group=breakdown.rule_group if breakdown else None,
         free_units_applied=breakdown.free_units_applied if breakdown else None,
         chargeable_units=breakdown.chargeable_units if breakdown else None,
+        solar_units_offset=breakdown.solar_units_offset if breakdown else None,
         slab_charges=[SlabChargeRead(**vars(sc)) for sc in breakdown.slab_charges] if breakdown else [],
         fixed_charge=breakdown.fixed_charge if breakdown else None,
         total_estimated_amount=breakdown.total_estimated_amount if breakdown else None,

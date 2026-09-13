@@ -58,15 +58,24 @@ Phase 3 (auth, partial):
   same backend and SQLite database
 - Self-service password reset via two security questions chosen at
   signup (no email/SMTP setup yet, so this is the only reset path)
-- Not yet done: email verification, multiple users per household,
-  PostgreSQL, and real multi-device sync (still requires running the
-  backend on one machine both clients can reach)
+- Same login/data also works on Android over the same Wi-Fi network as
+  the backend (see "Mobile (Android)" below); iOS not attempted (needs a
+  Mac/Xcode)
+- Not yet done: email verification, multiple users per household
+
+Phase 4 (production deployment, partial):
+- PostgreSQL support (driver + `DATABASE_URL` already worked without code
+  changes - see `docs/decisions/0006-production-deployment.md`), Docker
+  Compose, and Caddy (automatic HTTPS) are written and ready but **not yet
+  deployed** to the Hostinger VPS - see "Production deployment" below
+- Not yet done: an actual deploy to the VPS, a packaged Windows installer,
+  and a Play Store listing for Android
 
 All of the above is covered by automated tests, including tariff boundary
 tests, and exposed through a FastAPI HTTP API.
 
-Not yet implemented: PostgreSQL/sync, Docker deployment, billing-assessment
-history/official-bill comparison, backup/restore. See `PRP.md` section 7
+Not yet implemented: billing-assessment history/official-bill comparison,
+automated backups. See `PRP.md` section 7
 for the full phase plan.
 
 **Tariff data warning:** the seeded example tariff plan uses made-up slab
@@ -227,6 +236,81 @@ can take several minutes.
   is reachable from another device, since Windows doesn't filter a
   machine's own loopback-style traffic to itself the same way it filters
   genuinely external connections. Don't treat it as a reachability test.
+
+## Production deployment (Hostinger VPS)
+
+CLAUDE.md Phase 4. Serves the real website and backend API at
+`wattledger.aiwithbala.in` / `api.wattledger.aiwithbala.in` over HTTPS,
+backed by PostgreSQL instead of SQLite, via Docker on the VPS. This
+section is a runbook you run yourself on the VPS (over SSH) and on this
+dev machine - nothing here runs automatically, and no VPS credentials
+belong in chat with any assistant, including this one.
+
+**Once, before first deploy:**
+
+1. **DNS**: add two **A records** at your domain registrar, both pointing
+   at the VPS's IP address:
+   - `wattledger.aiwithbala.in`
+   - `api.wattledger.aiwithbala.in`
+
+   (DNS changes can take a few minutes to a few hours to propagate - Let's
+   Encrypt certificate issuance in step 5 will fail until they have.)
+
+2. **Install Docker on the VPS** (skip if you picked Hostinger's Docker
+   template and it's already there - check with `docker --version`):
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   ```
+
+3. **Get the code onto the VPS**:
+   ```bash
+   git clone https://github.com/dbala2007/WattLedger-TN.git
+   cd WattLedger-TN
+   git checkout master   # deploy master, not dev - keep dev for day-to-day work
+   ```
+
+4. **Configure production secrets** (on the VPS, never committed):
+   ```bash
+   cp .env.production.example .env.production
+   nano .env.production   # fill in POSTGRES_PASSWORD and SECRET_KEY especially
+   ```
+
+**Every deploy** (first time, and whenever `master` has new commits):
+
+5. **Build the web app on this dev machine** (not the VPS - it doesn't
+   need the whole Flutter SDK installed) **and upload it**:
+   ```bash
+   cd frontend
+   flutter build web --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
+   scp -r build/web/* youruser@VPS_IP:~/WattLedger-TN/frontend/build/web/
+   ```
+6. **On the VPS**, pull the latest code and (re)start the stack:
+   ```bash
+   cd ~/WattLedger-TN
+   git pull origin master
+   docker compose --env-file .env.production up -d --build
+   ```
+7. **Verify**: `curl https://api.wattledger.aiwithbala.in/health` should
+   return `{"status":"ok"}`, and `https://wattledger.aiwithbala.in` should
+   load the app in a browser - both over HTTPS with a valid certificate
+   Caddy obtained automatically.
+
+**Point the desktop and mobile apps at production** the same way as LAN
+testing (see the Mobile section above), but with the real domain instead
+of a LAN IP:
+```bash
+flutter run -d windows --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
+flutter run -d DEVICE  --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
+```
+A packaged installer/Play Store build needs this baked in at build time
+(`flutter build windows` / `flutter build appbundle`, same `--dart-define`)
+rather than passed at `flutter run` time - not done yet, tracked as
+follow-up work.
+
+**Backups**: `docker compose --env-file .env.production exec postgres
+pg_dump -U wattledger wattledger > backup.sql` - not automated yet
+(CLAUDE.md's Phase 2 "local backup/restore" is still open for the
+production database too).
 
 ## Architecture
 

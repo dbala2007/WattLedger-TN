@@ -1,0 +1,67 @@
+# Production stack for the Hostinger VPS: PostgreSQL + the FastAPI backend
+# + Caddy (reverse proxy with automatic HTTPS via Let's Encrypt).
+#
+# Local dev does NOT use this file - it runs the backend directly with `uv
+# run uvicorn` against SQLite (see backend/README.md). This is Phase 4
+# (CLAUDE.md section 8) production deployment only.
+#
+# Usage on the VPS:
+#   cp .env.production.example .env.production
+#   # edit .env.production with real values (see comments in that file)
+#   docker compose --env-file .env.production up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published to the host - only the backend container talks to
+    # Postgres, over the private compose network. Nothing external can
+    # reach the database directly.
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TIMEZONE: ${TIMEZONE:-Asia/Kolkata}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Not published to the host either - only Caddy is reachable from the
+    # internet; it forwards to this container over the private network.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80" # required for Let's Encrypt's HTTP-01 certificate challenge
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/build/web:/srv/web:ro # the built Flutter web app - see README
+      - caddy_data:/data # persists issued HTTPS certificates across restarts
+      - caddy_config:/config
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+      WEB_DOMAIN: ${WEB_DOMAIN}
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

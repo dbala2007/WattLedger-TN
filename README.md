@@ -40,8 +40,11 @@ Phase 2 (billing engine):
 - Effective-dated, editable tariff plans with subsidy rules and slabs
   (never hard-coded - PRP.md section 5)
 - Bill estimate for the current cycle with a full slab-by-slab breakdown
-- A dev seed script loading an example (placeholder, unverified) TN
-  domestic tariff plan matching PRP.md's 200/100-free-unit scheme
+- The backend auto-seeds a default tariff plan on startup whenever the
+  database has none yet (`app/db/seed_data.py`) - it's never overwritten
+  once a plan exists, so this only saves re-entering it after a dev
+  database reset. Still not a verified TNERC/TNPDCL figure - see the
+  warning in that file and PRP.md section 4
 
 Phase 3 (auth, partial):
 - Signup/login with hashed passwords (bcrypt) and JWT access tokens
@@ -50,9 +53,11 @@ Phase 3 (auth, partial):
 - Same login works identically on the Flutter web build and the Windows
   desktop build (`AuthProvider`/`flutter_secure_storage`), against the
   same backend and SQLite database
-- Not yet done: password reset, email verification, multiple users
-  per household, PostgreSQL, and real multi-device sync (still requires
-  running the backend on one machine both clients can reach)
+- Self-service password reset via two security questions chosen at
+  signup (no email/SMTP setup yet, so this is the only reset path)
+- Not yet done: email verification, multiple users per household,
+  PostgreSQL, and real multi-device sync (still requires running the
+  backend on one machine both clients can reach)
 
 All of the above is covered by automated tests, including tariff boundary
 tests, and exposed through a FastAPI HTTP API.

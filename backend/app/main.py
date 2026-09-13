@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlmodel import Session
 
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router
@@ -16,7 +17,8 @@ from app.api.meters import router as meters_router
 from app.api.readings import router as readings_router
 from app.api.tariffs import router as tariffs_router
 from app.core.logging import get_logger
-from app.db.session import create_db_and_tables
+from app.db.seed_data import seed_default_tariff_plan_if_missing
+from app.db.session import create_db_and_tables, engine
 from app.domain.errors import (
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
@@ -34,6 +36,8 @@ async def lifespan(app: FastAPI):
     # so a fresh checkout works without a separate manual migration step.
     logger.info("Starting WattLedger TN backend, ensuring database tables exist.")
     create_db_and_tables()
+    with Session(engine) as session:
+        seed_default_tariff_plan_if_missing(session)
     yield
 
 

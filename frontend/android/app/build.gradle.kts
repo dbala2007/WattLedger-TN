@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "com.wattledger.wattledger_flutter"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage (used for the login token, same as on Windows/web)
+    // requires SDK 37 - Flutter's own default (flutter.compileSdkVersion) was
+    // still 36 as of this Flutter version.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

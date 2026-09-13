@@ -140,18 +140,67 @@ flutter run -d chrome     # or in a browser
 ```
 
 The backend must be running separately (see above) - the app calls
-`http://127.0.0.1:8000` (`frontend/lib/core/app_config.dart`).
+`http://127.0.0.1:8001` by default (`frontend/lib/core/app_config.dart`).
 
 The app opens to a login/signup screen (Phase 3) - create an account on
 first run. The login token is stored with `flutter_secure_storage`
 (Windows Credential Manager on desktop, browser-side encrypted storage on
-web), so you stay logged in between restarts on each platform.
+web, Android Keystore on Android), so you stay logged in between restarts
+on each platform.
 
 **Rebuilding the Windows `.exe` needs one extra Visual Studio component**:
 `flutter_secure_storage`'s Windows plugin needs the ATL headers, which
 aren't part of a default "Desktop development with C++" install. In the
 Visual Studio Installer, Modify → Individual components → check "C++ ATL
 for latest v143 build tools (x86 & x64)".
+
+## Mobile (Android) - same Wi-Fi
+
+There's no separate "sync" system to build - every client (Windows, web,
+Android) just calls the same FastAPI backend and reads/writes the same
+database, so they're already always in sync with each other. The only
+extra step a phone needs, that Windows/web don't, is a way to actually
+*reach* that backend over the network:
+
+1. **Run the backend so other devices on the network can reach it** - bind
+   to all interfaces, not just this PC:
+   ```bash
+   uv run uvicorn app.main:app --host 0.0.0.0 --port 8001
+   ```
+2. **Find this PC's LAN IP** (Windows): `ipconfig`, the `IPv4 Address`
+   under your Wi-Fi adapter (e.g. `192.168.1.44`). It can change if your
+   router reassigns it, so re-check if the phone stops connecting later.
+3. **Allow the connection through Windows Firewall** the first time - if a
+   "Windows Defender Firewall has blocked some features" prompt appears
+   when the backend starts, allow it for your network. If it doesn't
+   prompt and the phone still can't connect, add an inbound rule yourself
+   (Windows Settings → Network & Internet → Windows Firewall → Advanced
+   settings → Inbound Rules → New Rule → Port → TCP 8001 → Allow).
+4. **Enable Developer Options + USB debugging** on the phone (Settings →
+   About phone → tap "Build number" 7 times → Developer options → enable
+   "USB debugging"), then connect it by USB cable and accept the
+   "Allow USB debugging?" prompt on the phone.
+5. **Run the app, pointing it at the PC's LAN IP** (not 127.0.0.1 - the
+   phone is a separate device, so 127.0.0.1 on Android means the phone
+   itself):
+   ```bash
+   flutter run -d DEVICE --dart-define=API_BASE_URL=http://192.168.1.44:8001
+   ```
+   (`flutter devices` lists connected devices/their id if more than one is
+   attached). A signed-in session on the phone sees the same meters,
+   readings, and tariffs as the Windows app and the web app immediately -
+   there's nothing to "sync," it's the same data.
+
+This only works while the phone is on the same Wi-Fi network as this PC
+and the backend is running here. Reaching it from mobile data or a
+different network needs the backend deployed somewhere with a real
+address (CLAUDE.md Phase 4 - Docker + PostgreSQL + a VPS) - not done yet.
+
+**Android build note:** `flutter_secure_storage` requires `compileSdk 37`,
+one version above Flutter's own default for this Flutter release -
+already set in `frontend/android/app/build.gradle.kts`. The very first
+Android build also downloads missing SDK platforms automatically, which
+can take several minutes.
 
 ## Architecture
 

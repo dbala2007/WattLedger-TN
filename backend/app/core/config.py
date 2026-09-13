@@ -27,7 +27,21 @@ class Settings(BaseSettings):
     secret_key: str = "dev-only-insecure-secret-change-me"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days - single access token, no refresh flow yet.
 
+    # Comma-separated list of allowed browser origins for the web build,
+    # e.g. "https://wattledger.example.com,https://www.wattledger.example.com".
+    # "*" (the default) is fine for local development, where the Flutter web
+    # dev server runs on an unpredictable localhost port, but CLAUDE.md
+    # section 14 requires this be restricted to known origins before any
+    # real deployment - set CORS_ORIGINS in production's .env.
+    cors_origins: str = "*"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        if self.cors_origins.strip() == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 # A single shared Settings instance - import this rather than constructing

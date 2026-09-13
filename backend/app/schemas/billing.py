@@ -36,6 +36,7 @@ class BillEstimateRead(BaseModel):
     rule_group: str | None = None
     free_units_applied: Decimal | None = None
     chargeable_units: Decimal | None = None
+    solar_units_offset: Decimal | None = None
     slab_charges: list[SlabChargeRead] = []
     fixed_charge: Decimal | None = None
     total_estimated_amount: Decimal | None = None

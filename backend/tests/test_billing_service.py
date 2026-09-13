@@ -50,9 +50,11 @@ def _seed_example_tariff_plan(session, effective_from=PLAN_DATE, effective_to=No
     )
 
 
-def _meter_with_cycle(session, user_id, reference_date=date(2026, 5, 1), cycle_length_months=2):
+def _meter_with_cycle(
+    session, user_id, reference_date=date(2026, 5, 1), cycle_length_months=2, solar_mode=SolarMode.NONE
+):
     meter = meter_service.create_meter(
-        session, user_id=user_id, meter_number="EB-1", solar_mode=SolarMode.NONE,
+        session, user_id=user_id, meter_number="EB-1", solar_mode=solar_mode,
         billing_cycle_reference_date=reference_date,
     )
     meter.cycle_length_months = cycle_length_months
@@ -88,6 +90,48 @@ def test_bill_estimate_sums_readings_within_cycle_and_applies_tariff(session, us
     assert estimate.breakdown is not None
     assert estimate.breakdown.rule_group == "cycle_upto_500"
     assert estimate.breakdown.chargeable_units == Decimal("100.0")  # 300 - 200 free
+
+
+def test_bill_estimate_applies_solar_credit_for_on_grid_meter(session, user_id):
+    _seed_example_tariff_plan(session)
+    meter = _meter_with_cycle(session, user_id, reference_date=date(2026, 5, 1), solar_mode=SolarMode.ON_GRID)
+
+    reading_service.create_reading(
+        session, meter_id=meter.id, user_id=user_id, reading_date=date(2026, 4, 30),
+        eb_units=Decimal("1000.0"), solar_units=Decimal("0"),
+    )
+    reading_service.create_reading(
+        session, meter_id=meter.id, user_id=user_id, reading_date=date(2026, 6, 1),
+        eb_units=Decimal("1300.0"), solar_units=Decimal("40.0"),
+    )
+
+    estimate = billing_service.estimate_current_bill(session, meter.id, user_id, as_of_date=date(2026, 6, 15))
+
+    # 300 total -> 200 free -> 100 chargeable -> minus 40 generated = 60.
+    assert estimate.total_solar_units == Decimal("40.0")
+    assert estimate.breakdown.solar_units_offset == Decimal("40.0")
+    assert estimate.breakdown.chargeable_units == Decimal("60.0")
+
+
+def test_bill_estimate_does_not_apply_solar_credit_for_off_grid_meter(session, user_id):
+    # Off-grid solar is self-consumed before the EB meter even sees it, so
+    # it must not also be subtracted as a separate credit here.
+    _seed_example_tariff_plan(session)
+    meter = _meter_with_cycle(session, user_id, reference_date=date(2026, 5, 1), solar_mode=SolarMode.OFF_GRID)
+
+    reading_service.create_reading(
+        session, meter_id=meter.id, user_id=user_id, reading_date=date(2026, 4, 30),
+        eb_units=Decimal("1000.0"), solar_units=Decimal("0"),
+    )
+    reading_service.create_reading(
+        session, meter_id=meter.id, user_id=user_id, reading_date=date(2026, 6, 1),
+        eb_units=Decimal("1300.0"), solar_units=Decimal("40.0"),
+    )
+
+    estimate = billing_service.estimate_current_bill(session, meter.id, user_id, as_of_date=date(2026, 6, 15))
+
+    assert estimate.breakdown.solar_units_offset == Decimal("0")
+    assert estimate.breakdown.chargeable_units == Decimal("100.0")
 
 
 def test_bill_estimate_uses_tariff_version_effective_during_billing_period(session, user_id):

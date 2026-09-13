@@ -14,6 +14,7 @@ from app.core.timezone import today_local
 from app.domain.billing_cycles import get_current_cycle_for_meter
 from app.domain.readings import sum_balances
 from app.domain.tariffs import BillBreakdown, calculate_bill
+from app.models.enums import SolarMode
 from app.repositories import reading_repository
 from app.services import meter_service, tariff_service
 
@@ -74,12 +75,18 @@ def estimate_current_bill(
     plan, subsidy_rules, slabs = tariff_service.get_effective_plan_bundle(
         session, consumer_category="DOMESTIC", as_of_date=as_of_date
     )
+    # Net-metering credit only makes sense for a grid-tied meter: off-grid
+    # solar is self-consumed before the EB reading is even taken (already
+    # reflected in a lower eb_balance, not a separate credit to apply here).
+    solar_units_generated = total_solar_units if meter.solar_mode == SolarMode.ON_GRID else Decimal("0")
+
     breakdown = calculate_bill(
         total_units=total_eb_units,
         tariff_plan=plan,
         subsidy_rules=subsidy_rules,
         slabs=slabs,
         as_of_date=as_of_date,
+        solar_units_generated=solar_units_generated,
     )
 
     logger.info(

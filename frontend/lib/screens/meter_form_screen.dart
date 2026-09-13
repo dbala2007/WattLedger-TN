@@ -160,7 +160,7 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
                   const SizedBox(height: 16),
                   _DatePickerField(
                     label: 'Billing cycle start date',
-                    helperText: 'Any date on/inside a past billing cycle for this meter',
+                    helperText: 'Used only until an assessment date below is recorded',
                     value: _billingCycleReferenceDate,
                     onTap: () => _pickDate(
                       _billingCycleReferenceDate,
@@ -171,6 +171,9 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
                     const SizedBox(height: 16),
                     _DatePickerField(
                       label: 'Last official assessment date (optional)',
+                      helperText: 'TNEB\'s billing cycle isn\'t a fixed 2 months - it\'s whenever the '
+                          'meter reader actually visits. Set this to that real date and it becomes '
+                          'the current cycle\'s start for every calculation.',
                       value: _lastAssessmentDate,
                       onTap: () =>
                           _pickDate(_lastAssessmentDate, (d) => setState(() => _lastAssessmentDate = d)),
@@ -178,6 +181,8 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
                     const SizedBox(height: 16),
                     _DatePickerField(
                       label: 'Next expected assessment date (optional)',
+                      helperText: 'Your best guess for the next visit - the cycle end used in '
+                          'calculations until you correct it to the real date',
                       value: _nextExpectedAssessmentDate,
                       onTap: () => _pickDate(
                         _nextExpectedAssessmentDate,

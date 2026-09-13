@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app.api.deps import get_current_user
+from app.db.seed_data import seed_default_meters_if_missing
 from app.db.session import get_session
 from app.domain.auth import SECURITY_QUESTIONS
 from app.models.user import User
@@ -38,12 +39,16 @@ def signup(payload: SignupRequest, session: Session = Depends(get_session)) -> T
         security_question_2=payload.security_question_2,
         security_answer_2=payload.security_answer_2,
     )
+    # Covers signing up as the household's own account on a database that's
+    # already running (not just freshly started) - see app/db/seed_data.py.
+    seed_default_meters_if_missing(session)
     return TokenResponse(access_token=token)
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
     _user, token = auth_service.login(session, email=payload.email, password=payload.password)
+    seed_default_meters_if_missing(session)
     return TokenResponse(access_token=token)
 
 

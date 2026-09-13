@@ -1,7 +1,7 @@
 """FastAPI application entry point.
 
-Run locally with:  uv run uvicorn app.main:app --reload
-Then open:          http://127.0.0.1:8000/docs
+Run locally with:  uv run uvicorn app.main:app --reload --port 8001
+Then open:          http://127.0.0.1:8001/docs
 """
 
 from contextlib import asynccontextmanager
@@ -9,14 +9,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlmodel import Session
 
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router
 from app.api.meters import router as meters_router
 from app.api.readings import router as readings_router
 from app.api.tariffs import router as tariffs_router
+from app.core.config import settings
 from app.core.logging import get_logger
-from app.db.session import create_db_and_tables
+from app.db.seed_data import seed_default_meters_if_missing, seed_default_tariff_plan_if_missing
+from app.db.session import create_db_and_tables, engine
 from app.domain.errors import (
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
@@ -34,18 +37,21 @@ async def lifespan(app: FastAPI):
     # so a fresh checkout works without a separate manual migration step.
     logger.info("Starting WattLedger TN backend, ensuring database tables exist.")
     create_db_and_tables()
+    with Session(engine) as session:
+        seed_default_tariff_plan_if_missing(session)
+        seed_default_meters_if_missing(session)
     yield
 
 
 app = FastAPI(title="WattLedger TN API", version="0.1.0", lifespan=lifespan)
 
-# Phase 1 (no login, desktop/web dev on one machine): allow any origin so
-# the Flutter web dev server (which runs on a random localhost port) can
-# call this API. CLAUDE.md's security rules require this be restricted to
-# known client origins before any real deployment (section 14).
+# Defaults to "*" for local development (the Flutter web dev server runs on
+# an unpredictable localhost port), but production's .env sets CORS_ORIGINS
+# to the real deployed origin(s) - CLAUDE.md section 14 requires this be
+# restricted before any real deployment.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_methods=["*"],
     allow_headers=["*"],
 )

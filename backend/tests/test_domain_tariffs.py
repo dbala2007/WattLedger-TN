@@ -61,13 +61,14 @@ def _example_slabs() -> list[TariffSlab]:
     ]
 
 
-def _bill(total_units: str):
+def _bill(total_units: str, solar_units_generated: str = "0"):
     return calculate_bill(
         total_units=Decimal(total_units),
         tariff_plan=_example_plan(),
         subsidy_rules=_example_subsidy_rules(),
         slabs=_example_slabs(),
         as_of_date=PLAN_DATE,
+        solar_units_generated=Decimal(solar_units_generated),
     )
 
 
@@ -127,6 +128,44 @@ def test_chargeable_units_never_negative_when_below_free_allowance():
     assert breakdown.chargeable_units == Decimal("0")
     assert breakdown.slab_charges == []
     assert breakdown.total_estimated_amount == Decimal("50")  # just the fixed charge
+
+
+def test_solar_generation_reduces_chargeable_units():
+    # total=300 -> free 200 -> chargeable 100 before solar.
+    breakdown = _bill("300", solar_units_generated="40")
+    assert breakdown.solar_units_offset == Decimal("40")
+    assert breakdown.chargeable_units == Decimal("60")
+    assert breakdown.total_estimated_amount == Decimal("230.00")  # 60*3 + 50
+
+
+def test_solar_generation_exactly_equal_to_chargeable_zeroes_it_out():
+    breakdown = _bill("300", solar_units_generated="100")
+    assert breakdown.solar_units_offset == Decimal("100")
+    assert breakdown.chargeable_units == Decimal("0")
+    assert breakdown.slab_charges == []
+    assert breakdown.total_estimated_amount == Decimal("50")  # just the fixed charge
+
+
+def test_solar_generation_exceeding_chargeable_units_clamps_at_zero():
+    # Generating more solar than there is left to charge for must not
+    # produce a negative bill or a negative offset carried anywhere.
+    breakdown = _bill("300", solar_units_generated="250")
+    assert breakdown.chargeable_units == Decimal("0")
+    assert breakdown.solar_units_offset == Decimal("100")  # only what was actually used
+    assert breakdown.total_estimated_amount == Decimal("50")
+
+
+def test_solar_generation_has_no_effect_when_already_fully_covered_by_free_units():
+    # total=50 is well under the 200 free units, so chargeable is already 0
+    # before solar is even considered - the offset applied must be 0, not 30.
+    breakdown = _bill("50", solar_units_generated="30")
+    assert breakdown.chargeable_units == Decimal("0")
+    assert breakdown.solar_units_offset == Decimal("0")
+
+
+def test_negative_solar_units_generated_is_rejected():
+    with pytest.raises(ValueError):
+        _bill("300", solar_units_generated="-1")
 
 
 def test_negative_total_units_is_rejected():

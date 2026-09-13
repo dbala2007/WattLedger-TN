@@ -202,6 +202,32 @@ already set in `frontend/android/app/build.gradle.kts`. The very first
 Android build also downloads missing SDK platforms automatically, which
 can take several minutes.
 
+### Troubleshooting: phone can't reach the backend
+
+- **`ClientException`/`SocketException: Connection refused`** - two causes
+  found in practice, in order of likelihood:
+  1. **The phone isn't actually on the same Wi-Fi network as this PC.**
+     Double-check on the phone (Settings → Wi-Fi → the connected network's
+     name) against what this PC is connected to - easy to mix up if the
+     router broadcasts more than one network (e.g. a 2.4GHz/5GHz pair, or
+     a guest network), since those are often *not* on the same subnet even
+     though they look similar.
+  2. **A third-party antivirus/security suite's own firewall** (McAfee,
+     Norton, Avast, etc. - check with `Get-Service | Where-Object
+     DisplayName -match 'McAfee|Norton|Avast|...'` in PowerShell) is
+     blocking the connection separately from Windows Defender Firewall.
+     These often *reject* (causing "Connection refused") rather than
+     silently drop, which is what makes this indistinguishable from a
+     Windows-Firewall-only problem until you check. Add an exception for
+     `backend\.venv\Scripts\python.exe` (or TCP port 8001) in that
+     program's own firewall/network-protection settings, the same way as
+     the Windows Firewall rule above.
+- **Curling `http://<LAN-IP>:8001/health` from the PC itself always
+  succeeds even when a phone can't connect** - it doesn't prove the port
+  is reachable from another device, since Windows doesn't filter a
+  machine's own loopback-style traffic to itself the same way it filters
+  genuinely external connections. Don't treat it as a reachability test.
+
 ## Architecture
 
 Business rules (balance calculation, validation, recalculation) live in

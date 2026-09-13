@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# MSIX signing certificate - a private key, never commit it (CLAUDE.md
+# section 14: no secrets in Git). Regenerate locally per README.md's
+# "Windows installer" section rather than sharing this file.
+windows/packaging/*.pfx

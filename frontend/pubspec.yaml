@@ -49,6 +49,29 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  msix: ^3.18.0
+
+# Packages the Windows release build into a real installable .msix (Start
+# Menu entry, Add/Remove Programs, no more "just an .exe in a build
+# folder") - run `dart run msix:create` after `flutter build windows
+# --release`. See README.md's "Windows installer" section for the full
+# command and the one-time certificate-trust step this needs since it's
+# self-signed rather than bought from a certificate authority.
+msix_config:
+  display_name: WattLedger TN
+  publisher_display_name: Balasubramanian Duraiswamy
+  publisher: CN=Balasubramanian Duraiswamy
+  identity_name: com.wattledger.wattledger-tn
+  msix_version: 1.0.0.0
+  logo_path: windows/packaging/msix_logo.png
+  capabilities: internetClient
+  languages: en-us
+  # A project-specific self-signed certificate, not the msix package's
+  # generic bundled test cert (which every project using this package
+  # shares) - regenerate with the PowerShell command in README.md if this
+  # file is missing. Never commit the .pfx itself (see .gitignore) - the
+  # password is passed via --certificate-password at packaging time instead.
+  certificate_path: windows/packaging/wattledger_signing.pfx
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

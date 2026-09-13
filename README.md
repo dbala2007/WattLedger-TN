@@ -163,6 +163,50 @@ aren't part of a default "Desktop development with C++" install. In the
 Visual Studio Installer, Modify → Individual components → check "C++ ATL
 for latest v143 build tools (x86 & x64)".
 
+### Windows installer (.msix)
+
+`flutter run -d windows` is a dev workflow, not something to hand someone
+else - there's no Start Menu entry, no uninstaller, and it points at
+whatever `API_BASE_URL` you happened to pass. A real installer is built
+with the `msix` package (`pubspec.yaml`'s `msix_config`), which packages
+the release build into a real installable `.msix` - Start Menu entry,
+Add/Remove Programs, the works - without needing a separate installer
+tool like Inno Setup.
+
+**One-time setup** - generate a signing certificate (self-signed, since
+this isn't going through the Microsoft Store or a paid certificate
+authority; regenerate if `frontend/windows/packaging/wattledger_signing.pfx`
+is ever missing - it's git-ignored, never committed):
+```powershell
+$cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Balasubramanian Duraiswamy" -KeyUsage DigitalSignature -FriendlyName "WattLedger TN" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+$password = ConvertTo-SecureString -String "YOUR-OWN-PASSWORD-HERE" -Force -AsPlainText
+Export-PfxCertificate -Cert $cert -FilePath "frontend\windows\packaging\wattledger_signing.pfx" -Password $password
+Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
+```
+
+**Every build**, pointing at production:
+```bash
+cd frontend
+flutter build windows --release --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
+dart run msix:create --certificate-password "YOUR-OWN-PASSWORD-HERE" --install-certificate false
+```
+Output: `frontend/build/windows/x64/runner/Release/wattledger_flutter.msix`.
+
+**Installing it on another PC** - since the certificate is self-signed
+(not from a trusted certificate authority), Windows won't install the
+`.msix` by double-clicking alone; the certificate has to be trusted
+first, once, on each machine that installs it:
+1. Copy both the `.msix` and the `.pfx` to the target PC
+2. Right-click the `.pfx` → **Install PFX** → **Local Machine** → enter
+   the certificate's password → let Windows pick the certificate store
+   automatically (**Trusted People**)
+3. Double-click the `.msix` → **Install**
+
+This is fine for testing/sharing with people you know. Real public
+distribution (so anyone can install it with no manual trust step) needs
+either a certificate bought from a certificate authority, or publishing
+through the Microsoft Store - not done yet.
+
 ## Mobile (Android) - same Wi-Fi
 
 There's no separate "sync" system to build - every client (Windows, web,

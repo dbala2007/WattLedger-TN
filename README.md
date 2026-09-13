@@ -31,7 +31,12 @@ Phase 1 (reading MVP):
 
 Phase 2 (billing engine):
 - Meter-specific billing-cycle window calculation (not tied to calendar
-  months - PRP.md section 6)
+  months - PRP.md section 6). TNEB's bi-monthly cycle isn't a fixed
+  interval - it's whenever the meter reader actually visits - so a
+  meter's "last official assessment date" / "next expected assessment
+  date" (Edit Meter screen) override the arithmetic entirely once set,
+  and every calculation uses that real window (see
+  `docs/decisions/0003-irregular-billing-cycles.md`)
 - Effective-dated, editable tariff plans with subsidy rules and slabs
   (never hard-coded - PRP.md section 5)
 - Bill estimate for the current cycle with a full slab-by-slab breakdown

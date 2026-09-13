@@ -54,9 +54,32 @@ def get_cycle_containing(
 
 
 def get_current_cycle_for_meter(meter: Meter, as_of_date: date) -> tuple[date, date]:
-    """Convenience wrapper: the cycle window containing as_of_date, using
-    this meter's own anchor date and cycle length.
+    """Convenience wrapper: the current cycle window for this meter.
+
+    TN EB billing cycles are not a fixed calendar interval (CLAUDE.md
+    section 6) - the real cycle length depends on when the meter reader
+    physically visits, which varies each time. So once the user has
+    recorded last_assessment_date (the day the meter was actually last
+    read), that date - not cycle_length_months arithmetic - becomes the
+    authoritative start of the current cycle, overriding the fixed-interval
+    calculation below entirely. The end date is next_expected_assessment_date
+    if the user has entered their own correction/estimate of the next visit,
+    or a cycle_length_months-based placeholder otherwise, used only until
+    they correct it once the real date is known.
+
+    Falls back to the fixed-interval calculation (get_cycle_containing) for
+    a meter that has never had an assessment date recorded, so existing
+    meters behave exactly as before until the user starts correcting dates.
     """
+    if meter.last_assessment_date is not None:
+        period_start = meter.last_assessment_date
+        period_end = (
+            meter.next_expected_assessment_date - timedelta(days=1)
+            if meter.next_expected_assessment_date is not None
+            else _add_months(period_start, meter.cycle_length_months) - timedelta(days=1)
+        )
+        return period_start, period_end
+
     if meter.billing_cycle_reference_date is None:
         raise ValueError(
             f"Meter {meter.id} has no billing_cycle_reference_date configured - "

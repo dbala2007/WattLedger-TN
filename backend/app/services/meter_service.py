@@ -91,6 +91,13 @@ def update_meter(
     if next_expected_assessment_date is not None:
         meter.next_expected_assessment_date = next_expected_assessment_date
 
+    if (
+        meter.last_assessment_date is not None
+        and meter.next_expected_assessment_date is not None
+        and meter.next_expected_assessment_date <= meter.last_assessment_date
+    ):
+        raise ValueError("Next expected assessment date must be after the last assessment date.")
+
     meter.updated_at = datetime.now(timezone.utc)
     updated = meter_repository.update(session, meter)
     logger.info("Updated meter %s", meter_id)

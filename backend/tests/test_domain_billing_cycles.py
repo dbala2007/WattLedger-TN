@@ -65,3 +65,30 @@ def test_get_current_cycle_for_meter_without_reference_date_raises():
     meter = Meter(meter_number="EB-1")
     with pytest.raises(ValueError):
         get_current_cycle_for_meter(meter, date(2026, 6, 1))
+
+
+def test_corrected_assessment_dates_override_fixed_interval_entirely():
+    # The EB reader actually visited on 2026-05-14 and 2026-07-20 - a 67 day
+    # cycle, not the fixed-interval 2-month math billing_cycle_reference_date
+    # would otherwise produce. The correction must win regardless of as_of_date.
+    meter = Meter(
+        meter_number="EB-1",
+        billing_cycle_reference_date=date(2026, 5, 10),
+        cycle_length_months=2,
+        last_assessment_date=date(2026, 5, 14),
+        next_expected_assessment_date=date(2026, 7, 20),
+    )
+    start, end = get_current_cycle_for_meter(meter, date(2026, 6, 1))
+    assert (start, end) == (date(2026, 5, 14), date(2026, 7, 19))
+
+
+def test_last_assessment_date_alone_estimates_end_via_cycle_length():
+    # Only the start has been corrected so far (the next visit hasn't
+    # happened yet) - the end is a placeholder estimate until it does.
+    meter = Meter(
+        meter_number="EB-1",
+        cycle_length_months=2,
+        last_assessment_date=date(2026, 5, 14),
+    )
+    start, end = get_current_cycle_for_meter(meter, date(2026, 6, 1))
+    assert (start, end) == (date(2026, 5, 14), date(2026, 7, 13))

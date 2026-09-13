@@ -48,6 +48,18 @@ def test_update_meter_can_set_billing_cycle_and_assessment_dates(session, user_i
     assert updated.next_expected_assessment_date == date(2026, 9, 9)
 
 
+def test_update_meter_rejects_next_assessment_on_or_before_last(session, user_id):
+    meter = meter_service.create_meter(session, user_id=user_id, meter_number="EB-1")
+    with pytest.raises(ValueError):
+        meter_service.update_meter(
+            session,
+            meter.id,
+            user_id,
+            last_assessment_date=date(2026, 7, 9),
+            next_expected_assessment_date=date(2026, 7, 9),
+        )
+
+
 def test_update_unknown_meter_raises_not_found(session, user_id):
     with pytest.raises(NotFoundError):
         meter_service.update_meter(session, "does-not-exist", user_id, active=False)

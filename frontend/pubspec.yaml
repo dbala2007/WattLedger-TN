@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 0.1.0-beta.1+1
 
 environment:
   sdk: ^3.12.2
@@ -63,10 +63,16 @@ msix_config:
   publisher_display_name: Balasubramanian Duraiswamy
   publisher: CN=Balasubramanian Duraiswamy
   identity_name: com.wattledger.wattledger-tn
-  msix_version: 1.0.0.0
+  msix_version: 0.1.0.0
   logo_path: windows/packaging/msix_logo.png
   capabilities: internetClient
   languages: en-us
+  # msix:create runs its own internal "flutter build windows" - a build
+  # done manually beforehand (e.g. with --dart-define=API_BASE_URL=...)
+  # gets silently overwritten by that internal rebuild, which does NOT
+  # know about dart-defines unless passed here. This keeps the packaged
+  # app pointed at production without needing a separate build step.
+  windows_build_args: --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
   # A project-specific self-signed certificate, not the msix package's
   # generic bundled test cert (which every project using this package
   # shares) - regenerate with the PowerShell command in README.md if this

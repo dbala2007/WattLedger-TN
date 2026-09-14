@@ -187,19 +187,37 @@ Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
 **Every build**, pointing at production:
 ```bash
 cd frontend
-flutter build windows --release --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 dart run msix:create --certificate-password "YOUR-OWN-PASSWORD-HERE" --install-certificate false
 ```
+`msix:create` runs its own internal `flutter build windows` - the
+`--dart-define=API_BASE_URL=...` it needs lives in `pubspec.yaml`'s
+`msix_config.windows_build_args` now, not on the command line, since a
+separate manual `flutter build windows --dart-define=...` beforehand gets
+silently thrown away and replaced by that internal rebuild (which never
+saw the dart-define) otherwise.
+
 Output: `frontend/build/windows/x64/runner/Release/wattledger_flutter.msix`.
 
 **Installing it on another PC** - since the certificate is self-signed
 (not from a trusted certificate authority), Windows won't install the
 `.msix` by double-clicking alone; the certificate has to be trusted
-first, once, on each machine that installs it:
-1. Copy both the `.msix` and the `.pfx` to the target PC
-2. Right-click the `.pfx` → **Install PFX** → **Local Machine** → enter
-   the certificate's password → let Windows pick the certificate store
-   automatically (**Trusted People**)
+first, once, on each machine that installs it. Share only the **public**
+certificate (`wattledger_signing.cer`, exported below) with testers -
+never the `.pfx`, which contains the private signing key and must never
+leave this dev machine or be committed/published anywhere:
+```powershell
+$cert = Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object { $_.Subject -eq "CN=Balasubramanian Duraiswamy" }
+Export-Certificate -Cert $cert -FilePath "frontend\windows\packaging\wattledger_signing.cer" -Type CERT
+```
+Then, on the target PC:
+1. Copy both the `.msix` and the `.cer` to the target PC
+2. Right-click the `.cer` → **Install Certificate** → **Local Machine**
+   (UAC prompt) → **"Place all certificates in the following store"**
+   → **Browse** → **Trusted People** → **Next** → **Finish**. Don't use
+   the "automatically select the store" option - for a self-signed
+   leaf certificate like this one it places it in **Personal** instead
+   of **Trusted People**, and the `.msix` install then fails with
+   `0x800B010A` ("publisher certificate could not be verified").
 3. Double-click the `.msix` → **Install**
 
 This is fine for testing/sharing with people you know. Real public

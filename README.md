@@ -181,25 +181,44 @@ is ever missing - it's git-ignored, never committed):
 $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Balasubramanian Duraiswamy" -KeyUsage DigitalSignature -FriendlyName "WattLedger TN" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
 $password = ConvertTo-SecureString -String "YOUR-OWN-PASSWORD-HERE" -Force -AsPlainText
 Export-PfxCertificate -Cert $cert -FilePath "frontend\windows\packaging\wattledger_signing.pfx" -Password $password
+# Also export the PUBLIC-only certificate now, while $cert still exists -
+# this is what gets shared with testers (see "Installing it on another
+# PC" below). Do this before the Remove-Item on the next line, or you'll
+# need to re-derive $cert from wherever the .pfx was last trusted.
+Export-Certificate -Cert $cert -FilePath "frontend\windows\packaging\wattledger_signing.cer" -Type CERT
 Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
 ```
 
 **Every build**, pointing at production:
 ```bash
 cd frontend
-flutter build windows --release --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 dart run msix:create --certificate-password "YOUR-OWN-PASSWORD-HERE" --install-certificate false
 ```
+`msix:create` runs its own internal `flutter build windows` - the
+`--dart-define=API_BASE_URL=...` it needs lives in `pubspec.yaml`'s
+`msix_config.windows_build_args` now, not on the command line, since a
+separate manual `flutter build windows --dart-define=...` beforehand gets
+silently thrown away and replaced by that internal rebuild (which never
+saw the dart-define) otherwise.
+
 Output: `frontend/build/windows/x64/runner/Release/wattledger_flutter.msix`.
 
 **Installing it on another PC** - since the certificate is self-signed
 (not from a trusted certificate authority), Windows won't install the
 `.msix` by double-clicking alone; the certificate has to be trusted
-first, once, on each machine that installs it:
-1. Copy both the `.msix` and the `.pfx` to the target PC
-2. Right-click the `.pfx` → **Install PFX** → **Local Machine** → enter
-   the certificate's password → let Windows pick the certificate store
-   automatically (**Trusted People**)
+first, once, on each machine that installs it. Share only the **public**
+certificate (`frontend\windows\packaging\wattledger_signing.cer`,
+produced by the one-time setup above) with testers - never the `.pfx`,
+which contains the private signing key and must never leave this dev
+machine or be committed/published anywhere. On the target PC:
+1. Copy both the `.msix` and the `.cer` to the target PC
+2. Right-click the `.cer` → **Install Certificate** → **Local Machine**
+   (UAC prompt) → **"Place all certificates in the following store"**
+   → **Browse** → **Trusted People** → **Next** → **Finish**. Don't use
+   the "automatically select the store" option - for a self-signed
+   leaf certificate like this one it places it in **Personal** instead
+   of **Trusted People**, and the `.msix` install then fails with
+   `0x800B010A` ("publisher certificate could not be verified").
 3. Double-click the `.msix` → **Install**
 
 This is fine for testing/sharing with people you know. Real public
@@ -244,16 +263,37 @@ extra step a phone needs, that Windows/web don't, is a way to actually
    readings, and tariffs as the Windows app and the web app immediately -
    there's nothing to "sync," it's the same data.
 
-This only works while the phone is on the same Wi-Fi network as this PC
-and the backend is running here. Reaching it from mobile data or a
-different network needs the backend deployed somewhere with a real
-address (CLAUDE.md Phase 4 - Docker + PostgreSQL + a VPS) - not done yet.
+This LAN flow only works while the phone is on the same Wi-Fi network as
+this PC and the backend is running here - it's a dev-time workflow for
+testing local changes. For anything reachable from mobile data or a
+different network (including real beta testers), point at the deployed
+production backend instead (CLAUDE.md Phase 4 - Docker + PostgreSQL + a
+VPS, now live at `api.wattledger.aiwithbala.in` - see "Production
+deployment" below) with `--dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in`.
 
 **Android build note:** `flutter_secure_storage` requires `compileSdk 37`,
 one version above Flutter's own default for this Flutter release -
 already set in `frontend/android/app/build.gradle.kts`. The very first
 Android build also downloads missing SDK platforms automatically, which
 can take several minutes.
+
+**Release-build gotchas** (only bite in `flutter build apk`/`--release`,
+not `flutter run` dev builds):
+- Flutter's template only adds `android.permission.INTERNET` to the
+  `debug`/`profile` manifests, not `frontend/android/app/src/main/AndroidManifest.xml`
+  (the release one) - already added there, but if it's ever removed the
+  app will silently lose all network access and fail with a misleading
+  `SocketException`/DNS-looking error rather than a permission error.
+- The app icon is generated by `flutter_launcher_icons` (dev dependency)
+  from `frontend/assets/icon/icon.png` (the same logo used for the
+  Windows `.msix`) - it does **not** regenerate automatically. After
+  changing that source image, re-run `dart run flutter_launcher_icons`
+  before rebuilding, or the launcher icon silently stays stale.
+- `frontend/android/gradle.properties`'s `org.gradle.jvmargs -Xmx` is set
+  to `3G`, deliberately below this dev machine's 7G total RAM (a default
+  `-Xmx8G` template value crashed the Gradle daemon mid-build with a
+  native out-of-memory error). Raise it only on a machine with more RAM
+  to spare.
 
 ### Troubleshooting: phone can't reach the backend
 
@@ -336,8 +376,12 @@ belong in chat with any assistant, including this one.
    ```
 7. **Verify**: `curl https://api.wattledger.aiwithbala.in/health` should
    return `{"status":"ok"}`, and `https://wattledger.aiwithbala.in` should
-   load the app in a browser - both over HTTPS with a valid certificate
-   Caddy obtained automatically.
+   load the app in a browser - both over HTTPS with a valid certificate.
+   TLS/routing is handled by the Traefik instance already running on this
+   VPS for other projects, not by Caddy - see
+   `docs/decisions/0006-production-deployment.md`. Caddy here only serves
+   the built web app as static files, reached by Traefik over the private
+   Docker network (no host port of its own).
 
 **Point the desktop and mobile apps at production** the same way as LAN
 testing (see the Mobile section above), but with the real domain instead
@@ -346,10 +390,13 @@ of a LAN IP:
 flutter run -d windows --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 flutter run -d DEVICE  --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 ```
-A packaged installer/Play Store build needs this baked in at build time
-(`flutter build windows` / `flutter build appbundle`, same `--dart-define`)
-rather than passed at `flutter run` time - not done yet, tracked as
-follow-up work.
+A packaged installer needs this baked in at build time rather than passed
+at `flutter run` time - done for Windows (see "Windows installer (.msix)"
+above, via `msix_config.windows_build_args`) and for Android (`flutter
+build apk --release --dart-define=API_BASE_URL=...`, see "Mobile
+(Android)" above). A signed Play Store `.aab` release build is not set up
+yet - no release keystore/Play Console listing exists (tracked as
+follow-up work).
 
 **Backups**: `docker compose --env-file .env.production exec postgres
 pg_dump -U wattledger wattledger > backup.sql` - not automated yet

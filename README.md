@@ -411,6 +411,19 @@ follow-up work).
 pg_dump -U wattledger wattledger > backup.sql` - not automated yet. Take
 one before deploying any release that adds a table (e.g. the billing
 history release, which creates `billingassessment` on startup)
+
+**API data export (no VPS login needed):** `scripts/backup_via_api.py`
+logs in to the production API as you and saves your meters, readings,
+meter reader visits and tariff plans to `backups/` (git-ignored) as
+JSON. It asks for your password without echoing it; set
+`WATTLEDGER_EMAIL` (and optionally `WATTLEDGER_PASSWORD` /
+`WATTLEDGER_API_URL`) as environment variables. It only covers what the
+API shows for your own account - it is not a replacement for `pg_dump`.
+
+```powershell
+$env:WATTLEDGER_EMAIL = "you@example.com"
+uv run --project backend python scripts/backup_via_api.py
+```
 (CLAUDE.md's Phase 2 "local backup/restore" is still open for the
 production database too).
 

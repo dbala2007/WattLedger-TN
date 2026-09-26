@@ -18,6 +18,9 @@ backend/.python-version
 *.db*
 *.sqlite3*
 
+# API data exports from scripts/backup_via_api.py - personal usage data.
+backups/
+
 # Environment variables / secrets
 .env
 .env.*

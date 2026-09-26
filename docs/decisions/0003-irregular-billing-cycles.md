@@ -52,3 +52,8 @@ zero-or-negative-length cycle.
   not a repeating pattern to evaluate at an arbitrary point in time). Per-cycle
   history with its own stored dates is still future work (`BillingAssessment`,
   CLAUDE.md section 10/12) - today only the *current* cycle can be corrected.
+
+**Update:** per-cycle history is now implemented - see
+`0007-billing-assessment-history.md`. `last_assessment_date` is kept as a
+copy of the latest recorded visit, so the current-cycle logic above is
+unchanged.

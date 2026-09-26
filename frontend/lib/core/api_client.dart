@@ -60,6 +60,12 @@ class ApiClient {
     return _handle(response);
   }
 
+  /// Full replace of a resource - unlike [patch], fields left out are cleared.
+  Future<dynamic> put(String path, Map<String, dynamic> body) async {
+    final response = await http.put(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
+    return _handle(response);
+  }
+
   Future<void> delete(String path) async {
     final response = await http.delete(_uri(path), headers: _jsonHeaders);
     _handle(response);

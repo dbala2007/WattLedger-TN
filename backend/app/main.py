@@ -18,7 +18,11 @@ from app.api.readings import router as readings_router
 from app.api.tariffs import router as tariffs_router
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.db.seed_data import seed_default_meters_if_missing, seed_default_tariff_plan_if_missing
+from app.db.seed_data import (
+    backfill_billing_assessments_from_meters,
+    seed_default_meters_if_missing,
+    seed_default_tariff_plan_if_missing,
+)
 from app.db.session import create_db_and_tables, engine
 from app.domain.errors import (
     EmailAlreadyRegisteredError,
@@ -40,6 +44,7 @@ async def lifespan(app: FastAPI):
     with Session(engine) as session:
         seed_default_tariff_plan_if_missing(session)
         seed_default_meters_if_missing(session)
+        backfill_billing_assessments_from_meters(session)
     yield
 
 

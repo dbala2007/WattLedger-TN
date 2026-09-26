@@ -495,8 +495,10 @@ Use this section as a living requirements interview.
 ## Billing
 
 - [ ] How will the initial billing-cycle start/end date be obtained?
-- [ ] Should the user enter the official TNPDCL assessment date after every bill?
-- [ ] Should the application store official bill amount for estimate-vs-actual comparison?
+- [x] Should the user enter the official TNPDCL assessment date after every bill? Yes - each meter reader visit is recorded as a `BillingAssessment`; consecutive visits define past cycles (docs/decisions/0007-billing-assessment-history.md).
+- [x] Should the application store official bill amount for estimate-vs-actual comparison? Yes - optional `official_bill_amount` on the visit that closes a cycle.
+- [ ] Should past-cycle estimates be frozen ("finalized") so editing a tariff plan in place never changes them? Currently they are recalculated live (see ADR 0007); adding a *new* tariff version already leaves them unchanged. Recommended default: add an explicit finalize/recompute step only if in-place tariff edits become common.
+- [ ] Should a mid-cycle tariff change be prorated across the cycle? Currently the whole cycle uses the tariff effective on its last day.
 - [ ] Are meter/service fixed charges required for the household tariff being tracked?
 - [ ] Should electricity tax/other adjustment lines be supported?
 - [ ] Should tariff updates require user confirmation before becoming active?

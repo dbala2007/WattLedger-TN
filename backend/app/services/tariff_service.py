@@ -93,10 +93,12 @@ def update_tariff_plan(
 
     Unlike create_tariff_plan (which always inserts a new version),
     this edits the plan in place - the user asked for full edit support to
-    fix data-entry mistakes. Because no BillingAssessment records reference
-    tariff plans yet, this is safe today; once historical bills exist,
-    editing a plan they relied on would need to be reconsidered (see
-    PRP.md section 5's tariff-source policy).
+    fix data-entry mistakes. Past-cycle bills (billing history) are
+    recalculated live rather than stored, so editing a plan in place also
+    changes the history estimates for cycles that plan covered - adding a
+    new effective-dated version does not. See
+    docs/decisions/0007-billing-assessment-history.md and PRP.md Open
+    Questions (finalized history).
     """
     plan = tariff_repository.get_plan(session, tariff_plan_id)
     if plan is None:

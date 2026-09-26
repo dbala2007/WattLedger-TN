@@ -13,11 +13,13 @@ real bill.
 from datetime import date
 from decimal import Decimal
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.logging import get_logger
+from app.models.billing_assessment import BillingAssessment
 from app.models.enums import BillingFrequency, SolarMode
-from app.repositories import meter_repository, tariff_repository, user_repository
+from app.models.meter import Meter
+from app.repositories import billing_assessment_repository, meter_repository, tariff_repository, user_repository
 from app.schemas.tariff import SubsidyRuleCreate, TariffSlabCreate
 from app.services import meter_service, reading_service, tariff_service
 
@@ -210,3 +212,24 @@ def seed_default_meters_if_missing(session: Session) -> None:
             )
 
     logger.info("Seeded default meters and reading history for %s.", OWNER_EMAIL)
+
+
+def backfill_billing_assessments_from_meters(session: Session) -> None:
+    """One-time data migration for the BillingAssessment history table
+    (docs/decisions/0007-billing-assessment-history.md).
+
+    Before that table existed, a meter's only record of the meter reader's
+    visit was Meter.last_assessment_date. This copies that date into the
+    history as its first assessment, so the current cycle keeps starting on
+    the same day. Safe to run on every startup: a meter whose date is
+    already in the history is skipped, so nothing is ever duplicated.
+    """
+    meters = session.exec(select(Meter).where(Meter.last_assessment_date != None)).all()  # noqa: E711
+    added = 0
+    for meter in meters:
+        if billing_assessment_repository.get_by_meter_and_date(session, meter.id, meter.last_assessment_date) is None:
+            session.add(BillingAssessment(meter_id=meter.id, assessed_on=meter.last_assessment_date))
+            added += 1
+    if added:
+        session.commit()
+        logger.info("Backfilled %s billing assessment(s) from existing meter assessment dates.", added)

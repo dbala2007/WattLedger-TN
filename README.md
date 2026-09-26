@@ -33,10 +33,20 @@ Phase 2 (billing engine):
 - Meter-specific billing-cycle window calculation (not tied to calendar
   months - PRP.md section 6). TNEB's bi-monthly cycle isn't a fixed
   interval - it's whenever the meter reader actually visits - so a
-  meter's "last official assessment date" / "next expected assessment
-  date" (Edit Meter screen) override the arithmetic entirely once set,
-  and every calculation uses that real window (see
+  meter's latest recorded meter reader visit and "next expected
+  assessment date" override the arithmetic entirely once set, and every
+  calculation uses that real window (see
   `docs/decisions/0003-irregular-billing-cycles.md`)
+- **Billing history (previous cycles):** on the Billing screen, use
+  "Record meter reader visit" each time the EB meter reader comes (the
+  assessment date on your EB card / TNPDCL SMS), optionally with the
+  official bill amount. Every pair of consecutive visits becomes a past
+  cycle with its full slab breakdown, priced with the tariff that was in
+  force then, and compared against the official bill if entered. To see
+  your previous cycle, record the visit that started it and the one that
+  ended it. Visits can be edited/deleted there; the Edit Meter screen now
+  only displays the latest one (see
+  `docs/decisions/0007-billing-assessment-history.md`)
 - Effective-dated, editable tariff plans with subsidy rules and slabs
   (never hard-coded - PRP.md section 5)
 - Bill estimate for the current cycle with a full slab-by-slab breakdown
@@ -74,8 +84,7 @@ Phase 4 (production deployment, partial):
 All of the above is covered by automated tests, including tariff boundary
 tests, and exposed through a FastAPI HTTP API.
 
-Not yet implemented: billing-assessment history/official-bill comparison,
-automated backups. See `PRP.md` section 7
+Not yet implemented: automated backups. See `PRP.md` section 7
 for the full phase plan.
 
 **Tariff data warning:** the seeded example tariff plan uses made-up slab
@@ -399,7 +408,9 @@ yet - no release keystore/Play Console listing exists (tracked as
 follow-up work).
 
 **Backups**: `docker compose --env-file .env.production exec postgres
-pg_dump -U wattledger wattledger > backup.sql` - not automated yet
+pg_dump -U wattledger wattledger > backup.sql` - not automated yet. Take
+one before deploying any release that adds a table (e.g. the billing
+history release, which creates `billingassessment` on startup)
 (CLAUDE.md's Phase 2 "local backup/restore" is still open for the
 production database too).
 

@@ -116,3 +116,61 @@ class BillEstimate {
     );
   }
 }
+
+/// One official TNPDCL assessment - the day the meter reader actually
+/// visited. Consecutive visits define the real billing cycles.
+class BillingAssessment {
+  final String id;
+  final String meterId;
+  final DateTime assessedOn;
+  final double? officialBillAmount;
+  final String? notes;
+
+  BillingAssessment({
+    required this.id,
+    required this.meterId,
+    required this.assessedOn,
+    required this.officialBillAmount,
+    required this.notes,
+  });
+
+  factory BillingAssessment.fromJson(Map<String, dynamic> json) {
+    return BillingAssessment(
+      id: json['id'] as String,
+      meterId: json['meter_id'] as String,
+      assessedOn: parseDate(json['assessed_on'] as String),
+      officialBillAmount: parseNullableDecimal(json['official_bill_amount']),
+      notes: json['notes'] as String?,
+    );
+  }
+}
+
+/// A completed (past) billing cycle: the app's full estimate, plus the
+/// official bill entered on the visit that closed the cycle, if any.
+class PastCycleBill {
+  final String openingAssessmentId;
+  final String closingAssessmentId;
+  final double? officialBillAmount;
+
+  /// Official minus estimated - positive means TNPDCL charged more.
+  final double? difference;
+  final BillEstimate estimate;
+
+  PastCycleBill({
+    required this.openingAssessmentId,
+    required this.closingAssessmentId,
+    required this.officialBillAmount,
+    required this.difference,
+    required this.estimate,
+  });
+
+  factory PastCycleBill.fromJson(Map<String, dynamic> json) {
+    return PastCycleBill(
+      openingAssessmentId: json['opening_assessment_id'] as String,
+      closingAssessmentId: json['closing_assessment_id'] as String,
+      officialBillAmount: parseNullableDecimal(json['official_bill_amount']),
+      difference: parseNullableDecimal(json['difference']),
+      estimate: BillEstimate.fromJson(json['estimate'] as Map<String, dynamic>),
+    );
+  }
+}

@@ -7,10 +7,12 @@ from datetime import date, datetime, timezone
 from sqlmodel import Session
 
 from app.core.logging import get_logger
+from app.core.timezone import today_local
 from app.domain.errors import NotFoundError
+from app.models.billing_assessment import BillingAssessment
 from app.models.enums import SolarMode
 from app.models.meter import Meter
-from app.repositories import meter_repository
+from app.repositories import billing_assessment_repository, meter_repository
 
 logger = get_logger(__name__)
 
@@ -59,6 +61,24 @@ def list_meters(session: Session, user_id: str, active_only: bool = False) -> li
     return meter_repository.list_all(session, user_id, active_only=active_only)
 
 
+def _record_assessment_if_missing(session: Session, meter: Meter, assessed_on: date) -> None:
+    """Setting last_assessment_date on a meter (the older way, still sent
+    by already-installed app versions) now also records that visit in the
+    BillingAssessment history, so the history and the meter never disagree.
+    last_assessment_date then becomes the latest recorded visit - which is
+    the date just given, unless a later visit was already recorded.
+    """
+    if assessed_on > today_local():
+        raise ValueError("Assessment date cannot be in the future.")
+    if billing_assessment_repository.get_by_meter_and_date(session, meter.id, assessed_on) is None:
+        # Staged only, not committed: it is committed together with the
+        # meter itself at the end of update_meter, so if the meter's own
+        # validation fails, neither change is saved.
+        session.add(BillingAssessment(meter_id=meter.id, assessed_on=assessed_on))
+    latest = billing_assessment_repository.list_for_meter(session, meter.id)[-1].assessed_on
+    meter.last_assessment_date = latest
+
+
 def update_meter(
     session: Session,
     meter_id: str,
@@ -87,7 +107,7 @@ def update_meter(
     if billing_cycle_reference_date is not None:
         meter.billing_cycle_reference_date = billing_cycle_reference_date
     if last_assessment_date is not None:
-        meter.last_assessment_date = last_assessment_date
+        _record_assessment_if_missing(session, meter, last_assessment_date)
     if next_expected_assessment_date is not None:
         meter.next_expected_assessment_date = next_expected_assessment_date
 
@@ -96,6 +116,9 @@ def update_meter(
         and meter.next_expected_assessment_date is not None
         and meter.next_expected_assessment_date <= meter.last_assessment_date
     ):
+        # Throw away the in-memory changes above (including any staged
+        # assessment row) so nothing half-applied is committed later.
+        session.rollback()
         raise ValueError("Next expected assessment date must be after the last assessment date.")
 
     meter.updated_at = datetime.now(timezone.utc)

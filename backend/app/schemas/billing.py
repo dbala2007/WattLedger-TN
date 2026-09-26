@@ -44,3 +44,36 @@ class BillEstimateRead(BaseModel):
     tariff_plan_name: str | None = None
     tariff_effective_from: date | None = None
     tariff_source_reference: str | None = None
+
+
+class BillingAssessmentWrite(BaseModel):
+    """Body for recording or editing a meter reader visit. Used for both
+    POST (create) and PUT (full replace), so leaving official_bill_amount
+    or notes out on a PUT clears them.
+    """
+
+    assessed_on: date
+    official_bill_amount: Decimal | None = None
+    notes: str | None = None
+
+
+class BillingAssessmentRead(BaseModel):
+    id: str
+    meter_id: str
+    assessed_on: date
+    official_bill_amount: Decimal | None
+    notes: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class PastCycleBillRead(BaseModel):
+    """One completed cycle: the app's estimate plus the official bill
+    (entered on the closing visit) and the difference between them.
+    """
+
+    opening_assessment_id: str
+    closing_assessment_id: str
+    official_bill_amount: Decimal | None
+    difference: Decimal | None
+    estimate: BillEstimateRead

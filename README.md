@@ -424,6 +424,15 @@ API shows for your own account - it is not a replacement for `pg_dump`.
 $env:WATTLEDGER_EMAIL = "you@example.com"
 uv run --project backend python scripts/backup_via_api.py
 ```
+
+To bring your **local** SQLite database up to date with that export
+(adds missing readings, corrects differing ones via the normal reading
+service so balances are recalculated, never deletes anything):
+
+```powershell
+uv run --project backend python scripts/import_api_backup.py backups\<file>.json          # dry run (report only)
+uv run --project backend python scripts/import_api_backup.py backups\<file>.json --apply  # backs up wattledger.db first
+```
 (CLAUDE.md's Phase 2 "local backup/restore" is still open for the
 production database too).
 

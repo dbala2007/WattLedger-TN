@@ -1,5 +1,16 @@
 # Production stack for the Hostinger VPS: PostgreSQL + the FastAPI backend
-# + Caddy (reverse proxy with automatic HTTPS via Let's Encrypt).
+# + Caddy (serves the built Flutter web app as static files).
+#
+# HTTPS/reverse-proxying is NOT handled here. This VPS already runs one
+# shared Traefik instance (/docker/traefik, network_mode: host, Docker
+# provider, cert resolver "letsencrypt") that owns host ports 80/443 for
+# every project on the box - see docs/decisions/0006-production-deployment.md.
+# `backend` and `caddy` below are discovered by Traefik via docker labels
+# and reached directly on their private compose-network IPs (Traefik's
+# host networking can already route to any container's bridge IP, so no
+# shared Docker network needs to be joined). Neither service publishes a
+# port to the host - do not add one, it would fight Traefik for 80/443
+# exactly like an in-container Caddy/Nginx with its own ACME would.
 #
 # Local dev does NOT use this file - it runs the backend directly with `uv
 # run uvicorn` against SQLite (see backend/README.md). This is Phase 4
@@ -41,27 +52,32 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Not published to the host either - only Caddy is reachable from the
-    # internet; it forwards to this container over the private network.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wattledger-api.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.wattledger-api.entrypoints=websecure"
+      - "traefik.http.routers.wattledger-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.wattledger-api.loadbalancer.server.port=8000"
+    # Not published to the host - Traefik reaches it directly on the
+    # compose network via the labels above.
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "80:80" # required for Let's Encrypt's HTTP-01 certificate challenge
-      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./frontend/build/web:/srv/web:ro # the built Flutter web app - see README
-      - caddy_data:/data # persists issued HTTPS certificates across restarts
-      - caddy_config:/config
-    environment:
-      API_DOMAIN: ${API_DOMAIN}
-      WEB_DOMAIN: ${WEB_DOMAIN}
     depends_on:
       - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wattledger-web.rule=Host(`${WEB_DOMAIN}`)"
+      - "traefik.http.routers.wattledger-web.entrypoints=websecure"
+      - "traefik.http.routers.wattledger-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.wattledger-web.loadbalancer.server.port=80"
+    # Static file server only - no TLS/ACME of its own and no host port.
+    # Traefik terminates HTTPS for wattledger.aiwithbala.in and forwards
+    # here in plain HTTP.
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:

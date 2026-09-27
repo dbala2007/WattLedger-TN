@@ -12,6 +12,8 @@ class SignupRequest(BaseModel):
     security_answer_1: str = Field(min_length=2)
     security_question_2: str
     security_answer_2: str = Field(min_length=2)
+    remember_me: bool = False
+    device_name: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def _questions_must_differ(self) -> "SignupRequest":
@@ -23,11 +25,24 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # "Keep me logged in on this device". Optional so older app versions,
+    # which don't send it, keep working exactly as before.
+    remember_me: bool = False
+    device_name: str | None = Field(default=None, max_length=100)
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # Only present when remember_me was ticked - the device stores it and
+    # later sends it to /auth/refresh instead of asking for the password.
+    refresh_token: str | None = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """Body for /auth/refresh and /auth/logout."""
+
+    refresh_token: str = Field(min_length=1, max_length=200)
 
 
 class UserRead(BaseModel):

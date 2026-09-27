@@ -11,6 +11,7 @@ from app.domain.auth import SECURITY_QUESTIONS, normalize_answer
 from app.domain.errors import EmailAlreadyRegisteredError, InvalidCredentialsError, NotFoundError
 from app.models.user import User
 from app.repositories import user_repository
+from app.services import device_session_service
 
 logger = get_logger(__name__)
 
@@ -93,6 +94,9 @@ def reset_password(
     user.hashed_password = hash_password(new_password)
     updated = user_repository.save(session, user)
     logger.info("User %s reset their password via security questions", user.id)
+    # Anyone who knew the old password may have ticked "Keep me logged in"
+    # somewhere - sign every remembered device out.
+    device_session_service.revoke_all_device_sessions(session, user_id=updated.id)
 
     token = create_access_token(updated.id)
     return updated, token

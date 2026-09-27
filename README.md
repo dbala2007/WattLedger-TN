@@ -33,10 +33,20 @@ Phase 2 (billing engine):
 - Meter-specific billing-cycle window calculation (not tied to calendar
   months - PRP.md section 6). TNEB's bi-monthly cycle isn't a fixed
   interval - it's whenever the meter reader actually visits - so a
-  meter's "last official assessment date" / "next expected assessment
-  date" (Edit Meter screen) override the arithmetic entirely once set,
-  and every calculation uses that real window (see
+  meter's latest recorded meter reader visit and "next expected
+  assessment date" override the arithmetic entirely once set, and every
+  calculation uses that real window (see
   `docs/decisions/0003-irregular-billing-cycles.md`)
+- **Billing history (previous cycles):** on the Billing screen, use
+  "Record meter reader visit" each time the EB meter reader comes (the
+  assessment date on your EB card / TNPDCL SMS), optionally with the
+  official bill amount. Every pair of consecutive visits becomes a past
+  cycle with its full slab breakdown, priced with the tariff that was in
+  force then, and compared against the official bill if entered. To see
+  your previous cycle, record the visit that started it and the one that
+  ended it. Visits can be edited/deleted there; the Edit Meter screen now
+  only displays the latest one (see
+  `docs/decisions/0007-billing-assessment-history.md`)
 - Effective-dated, editable tariff plans with subsidy rules and slabs
   (never hard-coded - PRP.md section 5)
 - Bill estimate for the current cycle with a full slab-by-slab breakdown
@@ -51,6 +61,16 @@ Phase 2 (billing engine):
 
 Phase 3 (auth, partial):
 - Signup/login with hashed passwords (bcrypt) and JWT access tokens
+- **"Keep me logged in on this device"** (login screen checkbox): the
+  device also gets a long-lived refresh token, stored in secure storage
+  (Windows Credential Manager / Android Keystore / encrypted browser
+  storage), and silently renews the 7-day access token with it - so the
+  password isn't asked for again until you log out or don't use the app
+  for `REMEMBER_ME_DAYS` (default 180) days. Unticked, nothing is saved
+  and closing the app logs you out. The server keeps only a SHA-256 hash
+  of each device's token (`DeviceSession` table); logging out forgets
+  that device, and a password reset signs out every device (see
+  `docs/decisions/0008-keep-me-logged-in.md`)
 - Every meter (and everything reached through it - readings, billing) is
   scoped to the logged-in user; tariff plans stay shared/unscoped
 - Same login works identically on the Flutter web build and the Windows
@@ -74,8 +94,7 @@ Phase 4 (production deployment, partial):
 All of the above is covered by automated tests, including tariff boundary
 tests, and exposed through a FastAPI HTTP API.
 
-Not yet implemented: billing-assessment history/official-bill comparison,
-automated backups. See `PRP.md` section 7
+Not yet implemented: automated backups. See `PRP.md` section 7
 for the full phase plan.
 
 **Tariff data warning:** the seeded example tariff plan uses made-up slab
@@ -181,25 +200,44 @@ is ever missing - it's git-ignored, never committed):
 $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Balasubramanian Duraiswamy" -KeyUsage DigitalSignature -FriendlyName "WattLedger TN" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
 $password = ConvertTo-SecureString -String "YOUR-OWN-PASSWORD-HERE" -Force -AsPlainText
 Export-PfxCertificate -Cert $cert -FilePath "frontend\windows\packaging\wattledger_signing.pfx" -Password $password
+# Also export the PUBLIC-only certificate now, while $cert still exists -
+# this is what gets shared with testers (see "Installing it on another
+# PC" below). Do this before the Remove-Item on the next line, or you'll
+# need to re-derive $cert from wherever the .pfx was last trusted.
+Export-Certificate -Cert $cert -FilePath "frontend\windows\packaging\wattledger_signing.cer" -Type CERT
 Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
 ```
 
 **Every build**, pointing at production:
 ```bash
 cd frontend
-flutter build windows --release --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 dart run msix:create --certificate-password "YOUR-OWN-PASSWORD-HERE" --install-certificate false
 ```
+`msix:create` runs its own internal `flutter build windows` - the
+`--dart-define=API_BASE_URL=...` it needs lives in `pubspec.yaml`'s
+`msix_config.windows_build_args` now, not on the command line, since a
+separate manual `flutter build windows --dart-define=...` beforehand gets
+silently thrown away and replaced by that internal rebuild (which never
+saw the dart-define) otherwise.
+
 Output: `frontend/build/windows/x64/runner/Release/wattledger_flutter.msix`.
 
 **Installing it on another PC** - since the certificate is self-signed
 (not from a trusted certificate authority), Windows won't install the
 `.msix` by double-clicking alone; the certificate has to be trusted
-first, once, on each machine that installs it:
-1. Copy both the `.msix` and the `.pfx` to the target PC
-2. Right-click the `.pfx` → **Install PFX** → **Local Machine** → enter
-   the certificate's password → let Windows pick the certificate store
-   automatically (**Trusted People**)
+first, once, on each machine that installs it. Share only the **public**
+certificate (`frontend\windows\packaging\wattledger_signing.cer`,
+produced by the one-time setup above) with testers - never the `.pfx`,
+which contains the private signing key and must never leave this dev
+machine or be committed/published anywhere. On the target PC:
+1. Copy both the `.msix` and the `.cer` to the target PC
+2. Right-click the `.cer` → **Install Certificate** → **Local Machine**
+   (UAC prompt) → **"Place all certificates in the following store"**
+   → **Browse** → **Trusted People** → **Next** → **Finish**. Don't use
+   the "automatically select the store" option - for a self-signed
+   leaf certificate like this one it places it in **Personal** instead
+   of **Trusted People**, and the `.msix` install then fails with
+   `0x800B010A` ("publisher certificate could not be verified").
 3. Double-click the `.msix` → **Install**
 
 This is fine for testing/sharing with people you know. Real public
@@ -244,16 +282,37 @@ extra step a phone needs, that Windows/web don't, is a way to actually
    readings, and tariffs as the Windows app and the web app immediately -
    there's nothing to "sync," it's the same data.
 
-This only works while the phone is on the same Wi-Fi network as this PC
-and the backend is running here. Reaching it from mobile data or a
-different network needs the backend deployed somewhere with a real
-address (CLAUDE.md Phase 4 - Docker + PostgreSQL + a VPS) - not done yet.
+This LAN flow only works while the phone is on the same Wi-Fi network as
+this PC and the backend is running here - it's a dev-time workflow for
+testing local changes. For anything reachable from mobile data or a
+different network (including real beta testers), point at the deployed
+production backend instead (CLAUDE.md Phase 4 - Docker + PostgreSQL + a
+VPS, now live at `api.wattledger.aiwithbala.in` - see "Production
+deployment" below) with `--dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in`.
 
 **Android build note:** `flutter_secure_storage` requires `compileSdk 37`,
 one version above Flutter's own default for this Flutter release -
 already set in `frontend/android/app/build.gradle.kts`. The very first
 Android build also downloads missing SDK platforms automatically, which
 can take several minutes.
+
+**Release-build gotchas** (only bite in `flutter build apk`/`--release`,
+not `flutter run` dev builds):
+- Flutter's template only adds `android.permission.INTERNET` to the
+  `debug`/`profile` manifests, not `frontend/android/app/src/main/AndroidManifest.xml`
+  (the release one) - already added there, but if it's ever removed the
+  app will silently lose all network access and fail with a misleading
+  `SocketException`/DNS-looking error rather than a permission error.
+- The app icon is generated by `flutter_launcher_icons` (dev dependency)
+  from `frontend/assets/icon/icon.png` (the same logo used for the
+  Windows `.msix`) - it does **not** regenerate automatically. After
+  changing that source image, re-run `dart run flutter_launcher_icons`
+  before rebuilding, or the launcher icon silently stays stale.
+- `frontend/android/gradle.properties`'s `org.gradle.jvmargs -Xmx` is set
+  to `3G`, deliberately below this dev machine's 7G total RAM (a default
+  `-Xmx8G` template value crashed the Gradle daemon mid-build with a
+  native out-of-memory error). Raise it only on a machine with more RAM
+  to spare.
 
 ### Troubleshooting: phone can't reach the backend
 
@@ -336,8 +395,12 @@ belong in chat with any assistant, including this one.
    ```
 7. **Verify**: `curl https://api.wattledger.aiwithbala.in/health` should
    return `{"status":"ok"}`, and `https://wattledger.aiwithbala.in` should
-   load the app in a browser - both over HTTPS with a valid certificate
-   Caddy obtained automatically.
+   load the app in a browser - both over HTTPS with a valid certificate.
+   TLS/routing is handled by the Traefik instance already running on this
+   VPS for other projects, not by Caddy - see
+   `docs/decisions/0006-production-deployment.md`. Caddy here only serves
+   the built web app as static files, reached by Traefik over the private
+   Docker network (no host port of its own).
 
 **Point the desktop and mobile apps at production** the same way as LAN
 testing (see the Mobile section above), but with the real domain instead
@@ -346,13 +409,40 @@ of a LAN IP:
 flutter run -d windows --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 flutter run -d DEVICE  --dart-define=API_BASE_URL=https://api.wattledger.aiwithbala.in
 ```
-A packaged installer/Play Store build needs this baked in at build time
-(`flutter build windows` / `flutter build appbundle`, same `--dart-define`)
-rather than passed at `flutter run` time - not done yet, tracked as
-follow-up work.
+A packaged installer needs this baked in at build time rather than passed
+at `flutter run` time - done for Windows (see "Windows installer (.msix)"
+above, via `msix_config.windows_build_args`) and for Android (`flutter
+build apk --release --dart-define=API_BASE_URL=...`, see "Mobile
+(Android)" above). A signed Play Store `.aab` release build is not set up
+yet - no release keystore/Play Console listing exists (tracked as
+follow-up work).
 
 **Backups**: `docker compose --env-file .env.production exec postgres
-pg_dump -U wattledger wattledger > backup.sql` - not automated yet
+pg_dump -U wattledger wattledger > backup.sql` - not automated yet. Take
+one before deploying any release that adds a table (e.g. the billing
+history release, which creates `billingassessment` on startup)
+
+**API data export (no VPS login needed):** `scripts/backup_via_api.py`
+logs in to the production API as you and saves your meters, readings,
+meter reader visits and tariff plans to `backups/` (git-ignored) as
+JSON. It asks for your password without echoing it; set
+`WATTLEDGER_EMAIL` (and optionally `WATTLEDGER_PASSWORD` /
+`WATTLEDGER_API_URL`) as environment variables. It only covers what the
+API shows for your own account - it is not a replacement for `pg_dump`.
+
+```powershell
+$env:WATTLEDGER_EMAIL = "you@example.com"
+uv run --project backend python scripts/backup_via_api.py
+```
+
+To bring your **local** SQLite database up to date with that export
+(adds missing readings, corrects differing ones via the normal reading
+service so balances are recalculated, never deletes anything):
+
+```powershell
+uv run --project backend python scripts/import_api_backup.py backups\<file>.json          # dry run (report only)
+uv run --project backend python scripts/import_api_backup.py backups\<file>.json --apply  # backs up wattledger.db first
+```
 (CLAUDE.md's Phase 2 "local backup/restore" is still open for the
 production database too).
 

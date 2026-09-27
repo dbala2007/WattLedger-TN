@@ -25,6 +25,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isSignup = false;
   bool _submitting = false;
+
+  // "Keep me logged in on this device" - off by default, so a shared or
+  // public computer doesn't stay logged in unless the user asks for it.
+  bool _keepLoggedIn = false;
   String? _error;
 
   String? _securityQuestion1;
@@ -73,9 +77,10 @@ class _LoginScreenState extends State<LoginScreen> {
           securityAnswer1: _answer1Controller.text.trim(),
           securityQuestion2: _securityQuestion2!,
           securityAnswer2: _answer2Controller.text.trim(),
+          rememberMe: _keepLoggedIn,
         );
       } else {
-        await authProvider.login(email: email, password: password);
+        await authProvider.login(email: email, password: password, rememberMe: _keepLoggedIn);
       }
       // No navigation needed: main.dart watches AuthProvider.isAuthenticated
       // and swaps to AppShell automatically once this completes.
@@ -136,7 +141,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                   if (_isSignup) ..._buildSecurityQuestionFields(),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: _keepLoggedIn,
+                    onChanged: _submitting ? null : (value) => setState(() => _keepLoggedIn = value ?? false),
+                    title: const Text('Keep me logged in on this device'),
+                    subtitle: const Text("You won't be asked for your password again here until you log out. "
+                        "Don't tick this on a shared computer."),
+                  ),
+                  const SizedBox(height: 12),
                   if (_error != null) ...[
                     Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                     const SizedBox(height: 12),

@@ -1,16 +1,12 @@
-# Caddy automatically obtains and renews HTTPS certificates from Let's
-# Encrypt for both domains below - no manual certbot/cron setup needed.
-# {$API_DOMAIN} / {$WEB_DOMAIN} are filled in from docker-compose.yml's
-# environment at container start (set in .env.production) - expected to be
-# api.wattledger.aiwithbala.in and wattledger.aiwithbala.in. Both need their
-# own DNS A record pointing at the VPS's IP for Let's Encrypt to issue
-# certificates for them.
+# Static file server for the built Flutter web app only. No per-domain
+# blocks and no HTTPS here - the shared Traefik instance already running on
+# this VPS (see docker-compose.yml and docs/decisions/0006) does host-based
+# routing and Let's Encrypt TLS termination before a request ever reaches
+# this container, and forwards to it in plain HTTP on :80. The backend is
+# reached by Traefik directly too (docker-compose.yml labels), not via this
+# Caddyfile - reverse_proxy to it was removed when Traefik took over.
 
-{$API_DOMAIN} {
-	reverse_proxy backend:8000
-}
-
-{$WEB_DOMAIN} {
+:80 {
 	root * /srv/web
 	try_files {path} /index.html # Flutter web's own client-side routing
 	file_server

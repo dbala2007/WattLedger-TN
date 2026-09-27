@@ -1,4 +1,6 @@
-"""HTTP endpoints for signup, login, 'who am I', and forgot-password."""
+"""HTTP endpoints for signup, login, 'who am I', forgot-password, and
+"keep me logged in" (refresh / logout of a remembered device).
+"""
 
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
@@ -13,12 +15,13 @@ from app.schemas.auth import (
     ForgotPasswordQuestionsResponse,
     ForgotPasswordResetRequest,
     LoginRequest,
+    RefreshTokenRequest,
     SecurityQuestionsResponse,
     SignupRequest,
     TokenResponse,
     UserRead,
 )
-from app.services import auth_service
+from app.services import auth_service, device_session_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,7 +33,7 @@ def list_security_questions() -> SecurityQuestionsResponse:
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupRequest, session: Session = Depends(get_session)) -> TokenResponse:
-    _user, token = auth_service.signup(
+    user, token = auth_service.signup(
         session,
         email=payload.email,
         password=payload.password,
@@ -39,17 +42,40 @@ def signup(payload: SignupRequest, session: Session = Depends(get_session)) -> T
         security_question_2=payload.security_question_2,
         security_answer_2=payload.security_answer_2,
     )
+    refresh_token = _remember_device_if_asked(session, user.id, payload.remember_me, payload.device_name)
     # Covers signing up as the household's own account on a database that's
     # already running (not just freshly started) - see app/db/seed_data.py.
     seed_default_meters_if_missing(session)
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token=token, refresh_token=refresh_token)
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
-    _user, token = auth_service.login(session, email=payload.email, password=payload.password)
+    user, token = auth_service.login(session, email=payload.email, password=payload.password)
+    refresh_token = _remember_device_if_asked(session, user.id, payload.remember_me, payload.device_name)
     seed_default_meters_if_missing(session)
+    return TokenResponse(access_token=token, refresh_token=refresh_token)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(payload: RefreshTokenRequest, session: Session = Depends(get_session)) -> TokenResponse:
+    """A remembered device swaps its refresh token for a new access token -
+    no password needed. 401 if the device was logged out or unused too long.
+    """
+    token = device_session_service.refresh_access_token(session, refresh_token=payload.refresh_token)
     return TokenResponse(access_token=token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(payload: RefreshTokenRequest, session: Session = Depends(get_session)) -> None:
+    """Forget a remembered device, so its refresh token stops working."""
+    device_session_service.revoke_device_session(session, refresh_token=payload.refresh_token)
+
+
+def _remember_device_if_asked(session: Session, user_id: str, remember_me: bool, device_name: str | None):
+    if not remember_me:
+        return None
+    return device_session_service.create_device_session(session, user_id=user_id, device_name=device_name)
 
 
 @router.get("/me", response_model=UserRead)

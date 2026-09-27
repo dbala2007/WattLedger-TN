@@ -6,7 +6,11 @@ from datetime import date
 
 import pytest
 
-from app.domain.billing_cycles import get_current_cycle_for_meter, get_cycle_containing
+from app.domain.billing_cycles import (
+    completed_cycles_from_assessments,
+    get_current_cycle_for_meter,
+    get_cycle_containing,
+)
 from app.models.meter import Meter
 
 
@@ -92,3 +96,34 @@ def test_last_assessment_date_alone_estimates_end_via_cycle_length():
     )
     start, end = get_current_cycle_for_meter(meter, date(2026, 6, 1))
     assert (start, end) == (date(2026, 5, 14), date(2026, 7, 13))
+
+
+# --- completed_cycles_from_assessments (billing history) ---
+
+
+def test_no_assessments_means_no_completed_cycles():
+    assert completed_cycles_from_assessments([]) == []
+
+
+def test_single_assessment_only_opens_a_cycle():
+    # One visit starts the current, still-running cycle - nothing has closed yet.
+    assert completed_cycles_from_assessments([date(2026, 7, 26)]) == []
+
+
+def test_two_assessments_make_one_cycle_ending_day_before_next_visit():
+    assert completed_cycles_from_assessments([date(2026, 7, 26), date(2026, 9, 24)]) == [
+        (date(2026, 7, 26), date(2026, 9, 23)),
+    ]
+
+
+def test_cycles_are_contiguous_and_ordered_regardless_of_input_order():
+    # Irregular gaps (58 and 60 days) - real visits are not a fixed interval.
+    visits = [date(2026, 9, 24), date(2026, 5, 29), date(2026, 7, 26)]
+    assert completed_cycles_from_assessments(visits) == [
+        (date(2026, 5, 29), date(2026, 7, 25)),
+        (date(2026, 7, 26), date(2026, 9, 23)),
+    ]
+
+
+def test_duplicate_dates_are_ignored():
+    assert completed_cycles_from_assessments([date(2026, 7, 26), date(2026, 7, 26)]) == []

@@ -86,3 +86,20 @@ def get_current_cycle_for_meter(meter: Meter, as_of_date: date) -> tuple[date, d
             "set one before computing a billing cycle."
         )
     return get_cycle_containing(meter.billing_cycle_reference_date, meter.cycle_length_months, as_of_date)
+
+
+def completed_cycles_from_assessments(assessment_dates: list[date]) -> list[tuple[date, date]]:
+    """Turn a meter's recorded assessment (meter reader visit) dates into
+    the completed billing cycles between them, oldest first.
+
+    Each pair of consecutive visits is one cycle: it starts on the earlier
+    visit and ends the day before the later one, keeping the existing
+    "one calendar day belongs to exactly one cycle" convention used by
+    get_current_cycle_for_meter. The very first visit only opens a cycle
+    (nothing earlier is known), and the latest visit opens the current,
+    still-running cycle - so N visits give N-1 completed cycles.
+
+    Example: visits on 26 Jul and 24 Sep -> one cycle, 26 Jul .. 23 Sep.
+    """
+    ordered = sorted(set(assessment_dates))
+    return [(start, next_start - timedelta(days=1)) for start, next_start in zip(ordered, ordered[1:])]

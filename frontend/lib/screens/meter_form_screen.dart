@@ -26,7 +26,6 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
   late SolarMode _solarMode;
   late bool _active;
   DateTime? _billingCycleReferenceDate;
-  DateTime? _lastAssessmentDate;
   DateTime? _nextExpectedAssessmentDate;
   bool _saving = false;
   String? _error;
@@ -43,7 +42,6 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
     _solarMode = existing?.solarMode ?? SolarMode.none;
     _active = existing?.active ?? true;
     _billingCycleReferenceDate = existing?.billingCycleReferenceDate;
-    _lastAssessmentDate = existing?.lastAssessmentDate;
     _nextExpectedAssessmentDate = existing?.nextExpectedAssessmentDate;
   }
 
@@ -85,7 +83,6 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
           active: _active,
           billingCycleReferenceDate: _billingCycleReferenceDate,
           cycleLengthMonths: cycleLength,
-          lastAssessmentDate: _lastAssessmentDate,
           nextExpectedAssessmentDate: _nextExpectedAssessmentDate,
         );
       } else {
@@ -169,14 +166,20 @@ class _MeterFormScreenState extends State<MeterFormScreen> {
                   ),
                   if (_isEditing) ...[
                     const SizedBox(height: 16),
-                    _DatePickerField(
-                      label: 'Last official assessment date (optional)',
-                      helperText: 'TNEB\'s billing cycle isn\'t a fixed 2 months - it\'s whenever the '
-                          'meter reader actually visits. Set this to that real date and it becomes '
-                          'the current cycle\'s start for every calculation.',
-                      value: _lastAssessmentDate,
-                      onTap: () =>
-                          _pickDate(_lastAssessmentDate, (d) => setState(() => _lastAssessmentDate = d)),
+                    // Read-only: visits are recorded in Billing > Billing history, which
+                    // keeps every past visit (and so every past cycle). This always
+                    // shows the latest one, which starts the current cycle.
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Last meter reader visit',
+                        helperText: 'Starts the current cycle. Record or correct visits in '
+                            'Billing > Billing history.',
+                      ),
+                      child: Text(
+                        widget.existing!.lastAssessmentDate == null
+                            ? 'Not recorded yet'
+                            : formatDisplayDate(widget.existing!.lastAssessmentDate!),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     _DatePickerField(

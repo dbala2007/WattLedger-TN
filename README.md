@@ -61,6 +61,16 @@ Phase 2 (billing engine):
 
 Phase 3 (auth, partial):
 - Signup/login with hashed passwords (bcrypt) and JWT access tokens
+- **"Keep me logged in on this device"** (login screen checkbox): the
+  device also gets a long-lived refresh token, stored in secure storage
+  (Windows Credential Manager / Android Keystore / encrypted browser
+  storage), and silently renews the 7-day access token with it - so the
+  password isn't asked for again until you log out or don't use the app
+  for `REMEMBER_ME_DAYS` (default 180) days. Unticked, nothing is saved
+  and closing the app logs you out. The server keeps only a SHA-256 hash
+  of each device's token (`DeviceSession` table); logging out forgets
+  that device, and a password reset signs out every device (see
+  `docs/decisions/0008-keep-me-logged-in.md`)
 - Every meter (and everything reached through it - readings, billing) is
   scoped to the logged-in user; tariff plans stay shared/unscoped
 - Same login works identically on the Flutter web build and the Windows

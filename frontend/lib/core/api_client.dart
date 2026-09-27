@@ -34,6 +34,15 @@ class ApiClient {
   // ever logged in per app instance.
   String? authToken;
 
+  /// Set by AuthProvider when this device is remembered ("Keep me logged
+  /// in"). Called when a request comes back 401 because the access token
+  /// has expired: it should fetch and set a fresh [authToken] and return
+  /// true, or return false if the device can't be refreshed. The request
+  /// is then retried once with the new token.
+  Future<bool> Function()? onAccessTokenExpired;
+
+  static const refreshPath = '/auth/refresh';
+
   Map<String, String> get _jsonHeaders => {
         'Content-Type': 'application/json',
         if (authToken != null) 'Authorization': 'Bearer $authToken',
@@ -45,30 +54,35 @@ class ApiClient {
     return uri.replace(queryParameters: query);
   }
 
-  Future<dynamic> get(String path, {Map<String, String>? query}) async {
-    final response = await http.get(_uri(path, query), headers: _jsonHeaders);
-    return _handle(response);
-  }
+  Future<dynamic> get(String path, {Map<String, String>? query}) =>
+      _send(path, () => http.get(_uri(path, query), headers: _jsonHeaders));
 
-  Future<dynamic> post(String path, Map<String, dynamic> body) async {
-    final response = await http.post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
-    return _handle(response);
-  }
+  Future<dynamic> post(String path, Map<String, dynamic> body) =>
+      _send(path, () => http.post(_uri(path), headers: _jsonHeaders, body: jsonEncode(body)));
 
-  Future<dynamic> patch(String path, Map<String, dynamic> body) async {
-    final response = await http.patch(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
-    return _handle(response);
-  }
+  Future<dynamic> patch(String path, Map<String, dynamic> body) =>
+      _send(path, () => http.patch(_uri(path), headers: _jsonHeaders, body: jsonEncode(body)));
 
   /// Full replace of a resource - unlike [patch], fields left out are cleared.
-  Future<dynamic> put(String path, Map<String, dynamic> body) async {
-    final response = await http.put(_uri(path), headers: _jsonHeaders, body: jsonEncode(body));
-    return _handle(response);
-  }
+  Future<dynamic> put(String path, Map<String, dynamic> body) =>
+      _send(path, () => http.put(_uri(path), headers: _jsonHeaders, body: jsonEncode(body)));
 
-  Future<void> delete(String path) async {
-    final response = await http.delete(_uri(path), headers: _jsonHeaders);
-    _handle(response);
+  Future<void> delete(String path) => _send(path, () => http.delete(_uri(path), headers: _jsonHeaders));
+
+  /// Runs [request]; if it fails with 401 while logged in, asks
+  /// [onAccessTokenExpired] for a new token and runs it once more.
+  /// [request] is a function (not a ready-made request) so the retry
+  /// re-reads [_jsonHeaders] and picks up the new token.
+  Future<dynamic> _send(String path, Future<http.Response> Function() request) async {
+    var response = await request();
+    final refresher = onAccessTokenExpired;
+    // Never for the refresh call itself - a rejected refresh must not
+    // trigger another refresh (that would loop forever).
+    final canRefresh = path != refreshPath && authToken != null && refresher != null;
+    if (response.statusCode == 401 && canRefresh && await refresher()) {
+      response = await request();
+    }
+    return _handle(response);
   }
 
   dynamic _handle(http.Response response) {

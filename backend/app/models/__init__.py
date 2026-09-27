@@ -3,6 +3,7 @@ before create_db_and_tables() runs.
 """
 
 from app.models.billing_assessment import BillingAssessment
+from app.models.device_session import DeviceSession
 from app.models.enums import BillingFrequency, SolarMode
 from app.models.meter import Meter
 from app.models.reading import MeterReading
@@ -19,4 +20,5 @@ __all__ = [
     "SubsidyRule",
     "BillingAssessment",
     "User",
+    "DeviceSession",
 ]

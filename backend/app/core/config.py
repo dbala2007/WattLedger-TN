@@ -25,7 +25,12 @@ class Settings(BaseSettings):
     # who sets it in .env invalidates every token signed with the old key
     # (i.e. logs everyone out), which is expected when rotating it.
     secret_key: str = "dev-only-insecure-secret-change-me"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days - single access token, no refresh flow yet.
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
+    # "Keep me logged in": how many days a remembered device stays logged
+    # in without being used. Each use restarts the countdown, so a device
+    # used at least this often never asks for the password again.
+    remember_me_days: int = 180
 
     # Comma-separated list of allowed browser origins for the web build,
     # e.g. "https://wattledger.example.com,https://www.wattledger.example.com".
